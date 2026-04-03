@@ -24,7 +24,13 @@
     .dist-btn { padding:.4rem .85rem; border:2px solid var(--border); border-radius:20px; cursor:pointer; font-size:.8rem; font-weight:600; color:var(--muted); transition:all .15s; background:#fff; }
     .dist-btn:hover { border-color:#cbd5e0; color:var(--text); }
     .dist-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
-    .sep { width:1px; height:24px; background:var(--border); }
+    .toggle-btn { padding:.4rem .85rem; border:2px solid var(--border); border-radius:20px; cursor:pointer; font-size:.8rem; font-weight:600; color:var(--muted); transition:all .15s; background:#fff; }
+    .toggle-btn:hover { border-color:#cbd5e0; color:var(--text); }
+    .toggle-btn.active { background:#2d3748; border-color:#2d3748; color:#fff; }
+    .scaler-btn { padding:.4rem .85rem; border:2px solid var(--border); border-radius:20px; cursor:pointer; font-size:.8rem; font-weight:600; color:var(--muted); transition:all .15s; background:#fff; }
+    .scaler-btn:hover { border-color:#cbd5e0; color:var(--text); }
+    .scaler-btn.active { background:#0d9488; border-color:#0d9488; color:#fff; }
+    .sep { width:1px; height:24px; background:var(--border); flex-shrink:0; }
     .stat-pill { display:flex; align-items:center; gap:.4rem; font-size:.82rem; }
     .stat-pill label { color:var(--muted); font-weight:500; }
     .stat-pill .val { font-weight:800; color:var(--primary); min-width:2.8rem; }
@@ -34,6 +40,7 @@
     .canvas-card { background:var(--card); border-radius:12px; padding:1rem 1rem .5rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
     .card-title { font-size:.7rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.5rem; }
     #distCanvas { width:100%; display:block; cursor:default; }
+    #scalerCanvas { width:100%; display:block; }
 
     /* Bottom grid */
     .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
@@ -81,7 +88,7 @@
 
 <div class="page">
 
-  <!-- Distribution picker + readout -->
+  <!-- Distribution picker + controls -->
   <div class="top-bar">
     <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Distribution:</span>
     <button class="dist-btn active" data-dist="normal"   onclick="setDist('normal')">Normal</button>
@@ -92,6 +99,14 @@
     <div class="sep"></div>
     <div class="stat-pill"><label>μ (mean)</label><span class="val" id="muVal">72.0</span></div>
     <div class="stat-pill"><label>σ (std dev)</label><span class="val" id="sigVal">12.0</span></div>
+    <div class="sep"></div>
+    <button class="toggle-btn" id="showDotsBtn" onclick="toggleShowDots()">Show All Points</button>
+    <div class="sep"></div>
+    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
+    <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')">None</button>
+    <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')">Standard</button>
+    <button class="scaler-btn"        data-scaler="minmax"   onclick="setScaler('minmax')">Min-Max</button>
+    <button class="scaler-btn"        data-scaler="robust"   onclick="setScaler('robust')">Robust</button>
     <div class="hint" id="dragHint">◆ drag mean &nbsp;●  drag σ handle &nbsp;▲ drag peak height (Normal only)</div>
   </div>
 
@@ -108,7 +123,7 @@
       <div class="card-title">Sample Students</div>
       <table class="student-table">
         <thead>
-          <tr>
+          <tr id="tableHead">
             <th>Student</th>
             <th>Grade</th>
             <th>z-score</th>
@@ -127,6 +142,13 @@
     </div>
 
   </div>
+
+  <!-- Scaler canvas (shown when scaler != none) -->
+  <div class="canvas-card" id="scalerCard" style="display:none">
+    <div class="card-title" id="scalerCardTitle"></div>
+    <canvas id="scalerCanvas" height="110"></canvas>
+  </div>
+
 </div>
 
 <script>
@@ -144,7 +166,6 @@ const SIGMA_MAX = 28;
 const MU_MIN    = 12;
 const MU_MAX    = 88;
 const SIGMA_REF = 5;
-// Y_SCALE: density × Y_SCALE = canvas pixels. Calibrated so σ=SIGMA_REF fills 87% of PLOT_H
 const Y_SCALE   = PLOT_H * 0.87 * SIGMA_REF * Math.sqrt(2 * Math.PI);
 
 // ══════════════════════════════════════════════════════
@@ -158,11 +179,10 @@ function normalPDF(x, mu, sigma) {
 }
 
 function uniformPDF(x, mu, sigma) {
-  const half = sigma * Math.SQRT2 * Math.sqrt(3) * 0.5;  // = sigma * sqrt(3)
+  const half = sigma * Math.SQRT2 * Math.sqrt(3) * 0.5;
   return (x >= mu - half && x <= mu + half) ? 1 / (2 * half) : 0;
 }
 
-// Split-normal: narrow left, wide right → right-skewed
 function rskewPDF(x, mu, sigma) {
   const sL = 0.55 * sigma, sR = 1.55 * sigma;
   const C = Math.sqrt(2 / Math.PI) / (sL + sR);
@@ -170,10 +190,8 @@ function rskewPDF(x, mu, sigma) {
   else         return C * Math.exp(-0.5 * ((x - mu) / sR) ** 2) * 2;
 }
 
-// Mirror: wide left, narrow right → left-skewed
 function lskewPDF(x, mu, sigma) { return rskewPDF(2 * mu - x, mu, sigma); }
 
-// Bimodal: two sub-peaks centred at mu ± 0.9σ, sub-sigma 0.4σ
 function bimodalPDF(x, mu, sigma) {
   return 0.5 * normalPDF(x, mu - 0.9 * sigma, 0.4 * sigma)
        + 0.5 * normalPDF(x, mu + 0.9 * sigma, 0.4 * sigma);
@@ -188,7 +206,7 @@ const DISTS = {
 };
 
 // ══════════════════════════════════════════════════════
-//  STUDENTS  (fixed z-scores; grades = mu + z*sigma)
+//  STUDENTS  (fixed z-scores)
 // ══════════════════════════════════════════════════════
 
 const STUDENTS = [
@@ -211,7 +229,89 @@ function studentGrade(student, mu, sigma) {
 //  STATE
 // ══════════════════════════════════════════════════════
 
-const state = { mu: 72, sigma: 12, distId: 'normal', selected: null };
+const state = { mu: 72, sigma: 12, distId: 'normal', selected: null, showDots: false, scaler: 'none' };
+
+// ══════════════════════════════════════════════════════
+//  DATA POINTS (N=200, stable z-scores per distribution)
+// ══════════════════════════════════════════════════════
+
+const N_POINTS = 200;
+let baseZScores = [];
+let baseJitter  = [];
+
+function mulberry32(seed) {
+  let s = seed;
+  return () => {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function sampleZ(distId, rng) {
+  if (distId === 'normal') {
+    let u; do { u = rng(); } while (u < 1e-10);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+  }
+  if (distId === 'uniform') {
+    return (rng() - 0.5) * 2 * Math.sqrt(3);
+  }
+  // Rejection sampling for rskew, lskew, bimodal
+  const pdf = DISTS[distId].pdf;
+  const MU0 = 72, S0 = 12;
+  let maxP = 0;
+  for (let x = 0; x <= 100; x += 1) maxP = Math.max(maxP, pdf(x, MU0, S0));
+  for (let a = 0; a < 10000; a++) {
+    const x = rng() * 100;
+    if (rng() * maxP < pdf(x, MU0, S0)) return (x - MU0) / S0;
+  }
+  return 0;
+}
+
+function generateBaseData() {
+  const rng = mulberry32(12345);
+  baseZScores = [];
+  baseJitter  = [];
+  for (let i = 0; i < N_POINTS; i++) {
+    baseZScores.push(sampleZ(state.distId, rng));
+    baseJitter.push((rng() - 0.5) * 2);  // [-1, 1]
+  }
+}
+
+function getAllGrades() {
+  return baseZScores.map(z => clamp(state.mu + z * state.sigma, 0, 100));
+}
+
+// ══════════════════════════════════════════════════════
+//  SCALER HELPERS
+// ══════════════════════════════════════════════════════
+
+function getScalerParams(grades) {
+  const n = grades.length;
+  const sorted = [...grades].sort((a, b) => a - b);
+  const mean = grades.reduce((s, x) => s + x, 0) / n;
+  const std  = Math.sqrt(grades.reduce((s, x) => s + (x - mean) ** 2, 0) / n) || 1;
+  const min  = sorted[0], max = sorted[n - 1];
+  const med  = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+  const q1   = sorted[Math.floor(n * 0.25)];
+  const q3   = sorted[Math.floor(n * 0.75)];
+  const iqr  = (q3 - q1) || 1;
+  return { mean, std, min, max, median: med, iqr, q1, q3 };
+}
+
+function applyScaler(x, params, type) {
+  if (type === 'standard') return (x - params.mean) / params.std;
+  if (type === 'minmax')   return (x - params.min) / ((params.max - params.min) || 1);
+  if (type === 'robust')   return (x - params.median) / params.iqr;
+  return x;
+}
+
+const SCALER_TITLES = {
+  standard: "Standard Scaler — x′ = (x − μ̂) / σ̂  →  zero mean, unit variance",
+  minmax:   "Min-Max Scaler — x′ = (x − min) / (max − min)  →  [0, 1]",
+  robust:   "Robust Scaler — x′ = (x − median) / IQR  →  outlier-resistant",
+};
 
 // ══════════════════════════════════════════════════════
 //  SCALE HELPERS
@@ -226,7 +326,7 @@ function makeScale(W) {
 }
 
 // ══════════════════════════════════════════════════════
-//  DRAWING
+//  DRAWING — main canvas
 // ══════════════════════════════════════════════════════
 
 function redraw() {
@@ -245,9 +345,12 @@ function redraw() {
   drawSigmaLines(ctx, sc);
   drawMeanLine(ctx, sc);
   drawSigmaAnnotations(ctx, W, sc);
+  if (state.showDots) drawDataPoints(ctx, sc);
   drawStudentDots(ctx, sc);
   if (state.selected !== null) drawStudentAnnotation(ctx, sc, state.selected);
   drawHandles(ctx, sc, pdf);
+
+  if (state.scaler !== 'none') drawScalerCanvas();
 }
 
 // ── σ coloured region fills ──────────────────────────
@@ -366,7 +469,6 @@ function drawSigmaAnnotations(ctx, W, sc) {
     ctx.beginPath();
     ctx.moveTo(a, y - 4); ctx.lineTo(a, y); ctx.lineTo(b, y); ctx.lineTo(b, y - 4);
     ctx.stroke();
-    // arrow heads
     [[a, 1], [b, -1]].forEach(([x, d]) => {
       ctx.beginPath();
       ctx.moveTo(x, y); ctx.lineTo(x + d * 5, y - 3);
@@ -383,6 +485,30 @@ function drawSigmaAnnotations(ctx, W, sc) {
   drawBracket(mu - 3 * sigma, mu + 3 * sigma, '± 3σ  (99.7%)', '#6b46c1', 2);
 }
 
+// ── all data points strip ────────────────────────────
+
+function drawDataPoints(ctx, sc) {
+  const { toX } = sc;
+  const grades = getAllGrades();
+
+  // label
+  ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
+  ctx.fillText(`${N_POINTS} sampled points`, toX(100) - 2, AX_Y - 30);
+
+  grades.forEach((g, i) => {
+    const x = toX(g);
+    const y = AX_Y - 22 + baseJitter[i] * 5;
+    const z = (g - state.mu) / state.sigma;
+    const absZ = Math.abs(z);
+    const color = absZ < 1 ? 'rgba(39,174,96,0.45)'
+                : absZ < 2 ? 'rgba(49,130,206,0.45)'
+                : absZ < 3 ? 'rgba(107,70,193,0.45)'
+                : 'rgba(229,62,62,0.45)';
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
 // ── student dots on axis ─────────────────────────────
 
 function drawStudentDots(ctx, sc) {
@@ -396,7 +522,6 @@ function drawStudentDots(ctx, sc) {
     ctx.lineWidth = selected ? 2.5 : 1.5;
     ctx.beginPath(); ctx.arc(x, AX_Y - 1, selected ? 7 : 5, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
-    // Name label on hover / selected
     if (selected) {
       ctx.fillStyle = s.color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
       ctx.fillText(s.name, x, AX_Y - 12);
@@ -414,12 +539,10 @@ function drawStudentAnnotation(ctx, sc, idx) {
   const gx = toX(g), mx = toX(state.mu);
   const curveY = toY(pdf(g, state.mu, state.sigma));
 
-  // Vertical dotted line up to curve
   ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
   ctx.beginPath(); ctx.moveTo(gx, AX_Y - 9); ctx.lineTo(gx, Math.max(curveY, PLOT_TOP + 5)); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Horizontal bracket from mean to grade
   if (Math.abs(gx - mx) > 4) {
     const by = AX_Y - 28;
     ctx.strokeStyle = s.color; ctx.lineWidth = 2;
@@ -427,18 +550,15 @@ function drawStudentAnnotation(ctx, sc, idx) {
     [mx, gx].forEach(bx => {
       ctx.beginPath(); ctx.moveTo(bx, by - 5); ctx.lineTo(bx, by + 5); ctx.stroke();
     });
-    // z-score label
     const z = s.z;
     const sign = z >= 0 ? '+' : '';
     ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
     ctx.fillText(`${sign}${z.toFixed(2)}σ`, (mx + gx) / 2, by - 7);
-    // Actual point diff label
     const diff = g - state.mu;
     ctx.font = '9px system-ui';
     ctx.fillText(`${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pts`, (mx + gx) / 2, by + 16);
   }
 
-  // Grade label below axis
   ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
   ctx.fillText(g.toFixed(1), gx, AX_Y + 14);
 }
@@ -455,7 +575,6 @@ function drawHandles(ctx, sc) {
   const sX = toX(state.mu + state.sigma);
   const pY = peakY(sc);
 
-  // Mean handle — blue diamond on axis
   ctx.fillStyle = '#4361ee'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(mX,     AX_Y + 3);
@@ -464,13 +583,11 @@ function drawHandles(ctx, sc) {
   ctx.lineTo(mX - 8, AX_Y + 11);
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
-  // Sigma handle — green circle to the right
   ctx.fillStyle = '#27ae60'; ctx.strokeStyle = '#fff';
   ctx.beginPath(); ctx.arc(sX, AX_Y + 11, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
   ctx.fillText('σ', sX, AX_Y + 15);
 
-  // Peak handle — red upward triangle (Normal only)
   if (DISTS[state.distId].peakHandle) {
     ctx.fillStyle = '#e74c3c'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
     ctx.beginPath();
@@ -479,6 +596,124 @@ function drawHandles(ctx, sc) {
     ctx.lineTo(mX - 8,  pY + 1);
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  SCALER CANVAS
+// ══════════════════════════════════════════════════════
+
+function drawScalerCanvas() {
+  const canvas = document.getElementById('scalerCanvas');
+  if (!canvas || !canvas.offsetWidth) return;
+  canvas.width = canvas.offsetWidth;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const grades = getAllGrades();
+  const params = getScalerParams(grades);
+  const scaledAll = grades.map(g => applyScaler(g, params, state.scaler));
+
+  // Display range
+  let lo, hi;
+  if (state.scaler === 'minmax') {
+    lo = -0.08; hi = 1.08;
+  } else {
+    const finite = scaledAll.filter(isFinite);
+    const rMin = Math.min(...finite), rMax = Math.max(...finite);
+    lo = Math.max(-4.5, rMin - 0.3);
+    hi = Math.min(4.5, rMax + 0.3);
+  }
+
+  const SPAD = 65;
+  const AY = Math.round(H * 0.60);
+  const toSX = v => SPAD + (v - lo) / (hi - lo) * (W - 2 * SPAD);
+
+  // Region fills (standard/robust)
+  if (state.scaler !== 'minmax') {
+    [[-3,3,'rgba(107,70,193,0.04)'],[-2,2,'rgba(49,130,206,0.07)'],[-1,1,'rgba(39,174,96,0.10)']].forEach(([a,b,c]) => {
+      const x1 = Math.max(SPAD, toSX(a)), x2 = Math.min(W - SPAD, toSX(b));
+      if (x2 > x1) { ctx.fillStyle = c; ctx.fillRect(x1, 6, x2 - x1, AY - 6); }
+    });
+  }
+
+  // Reference lines
+  const refs = state.scaler === 'minmax'
+    ? [[0,'min','#4361ee'],[0.5,'0.5','#94a3b8'],[1,'max','#4361ee']]
+    : [[-2,'−2','#3182ce'],[-1,'−1','#4361ee'],[0,'0','#1a202c'],[1,'+1','#4361ee'],[2,'+2','#3182ce']];
+
+  refs.forEach(([v, lbl, color]) => {
+    if (v < lo - 0.01 || v > hi + 0.01) return;
+    const x = toSX(v);
+    ctx.strokeStyle = color; ctx.lineWidth = v === 0 ? 1.5 : 1;
+    ctx.setLineDash(v === 0 ? [] : [4, 3]); ctx.globalAlpha = 0.65;
+    ctx.beginPath(); ctx.moveTo(x, 6); ctx.lineTo(x, AY); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    ctx.fillStyle = color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(lbl, x, 6);
+  });
+
+  // Axis line
+  ctx.strokeStyle = '#cbd5e0'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(SPAD, AY); ctx.lineTo(W - SPAD, AY); ctx.stroke();
+
+  // Tick marks + labels
+  const step = state.scaler === 'minmax' ? 0.25 : 1;
+  ctx.fillStyle = '#718096'; ctx.font = '10px system-ui';
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 0.001; v += step) {
+    const x = toSX(v);
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x, AY); ctx.lineTo(x, AY + 4); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillText(state.scaler === 'minmax' ? v.toFixed(2) : v.toFixed(0), x, AY + 14);
+  }
+
+  // Data points strip (above axis)
+  const stripY = AY - 20;
+  scaledAll.forEach((sv, i) => {
+    if (!isFinite(sv)) return;
+    const x = toSX(Math.max(lo, Math.min(hi, sv)));
+    const y = stripY + baseJitter[i] * 3;
+    ctx.fillStyle = 'rgba(120,144,180,0.38)';
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // Student dots (on axis line)
+  STUDENTS.forEach((s, k) => {
+    const g = studentGrade(s, state.mu, state.sigma);
+    const sv = applyScaler(g, params, state.scaler);
+    const x = toSX(Math.max(lo, Math.min(hi, sv)));
+    const isSel = state.selected === k;
+    ctx.fillStyle = s.color; ctx.strokeStyle = '#fff';
+    ctx.lineWidth = isSel ? 2.5 : 1.5;
+    ctx.beginPath(); ctx.arc(x, AY, isSel ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    if (isSel) {
+      ctx.fillStyle = s.color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(s.name, x, AY - 13);
+    }
+  });
+
+  // Axis description
+  const axDesc = {
+    standard: 'Scaled output — 0 = data mean, ±1 = ±1 std dev',
+    minmax:   'Scaled output — 0 = minimum grade, 1 = maximum grade',
+    robust:   'Scaled output — 0 = median, ±1 = ±1 IQR',
+  };
+  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(axDesc[state.scaler], W / 2, AY + 28);
+
+  // Stats summary
+  let statsText;
+  if (state.scaler === 'standard') {
+    statsText = `data μ̂ = ${params.mean.toFixed(1)}  ·  data σ̂ = ${params.std.toFixed(1)}`;
+  } else if (state.scaler === 'minmax') {
+    statsText = `min = ${params.min.toFixed(1)}  ·  max = ${params.max.toFixed(1)}  ·  range = ${(params.max - params.min).toFixed(1)}`;
+  } else {
+    statsText = `median = ${params.median.toFixed(1)}  ·  IQR = ${params.iqr.toFixed(1)}  (Q1=${params.q1.toFixed(1)}, Q3=${params.q3.toFixed(1)})`;
+  }
+  ctx.fillStyle = '#4361ee'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(statsText, W / 2, H - 4);
 }
 
 // ══════════════════════════════════════════════════════
@@ -508,7 +743,7 @@ function getStudentHit(cx, cy, W) {
 //  DRAG INTERACTION
 // ══════════════════════════════════════════════════════
 
-let drag = null; // { handle, startX, startY, startMu, startSigma }
+let drag = null;
 
 function canvasCoords(e, canvas) {
   const r = canvas.getBoundingClientRect();
@@ -541,7 +776,6 @@ function onMove(e) {
   if (drag) {
     const sc = makeScale(canvas.width);
     const dx = cx - drag.startX;
-    const dy = cy - drag.startY;
 
     if (drag.handle === 'mean') {
       state.mu = clamp(drag.startMu + sc.toV(PAD_L + dx) - sc.toV(PAD_L), MU_MIN, MU_MAX);
@@ -559,7 +793,6 @@ function onMove(e) {
     return;
   }
 
-  // Cursor hint
   const h = getHandle(cx, cy, canvas.width);
   const s = !h ? getStudentHit(cx, cy, canvas.width) : null;
   canvas.style.cursor = h === 'peak' ? 'ns-resize'
@@ -583,10 +816,10 @@ canvas.addEventListener('touchend',   onUp);
 // ══════════════════════════════════════════════════════
 
 function regionInfo(absZ) {
-  if (absZ < 1)  return { label: 'Within ±1σ',     pct: '68%',   bg: '#c6f6d5', color: '#276749' };
-  if (absZ < 2)  return { label: 'Within ±2σ',     pct: '95%',   bg: '#bee3f8', color: '#2c5282' };
-  if (absZ < 3)  return { label: 'Within ±3σ',     pct: '99.7%', bg: '#e9d8fd', color: '#553c9a' };
-  return             { label: 'Beyond ±3σ',         pct: '<0.3%', bg: '#fed7d7', color: '#742a2a' };
+  if (absZ < 1)  return { label: 'Within ±1σ',  pct: '68%',   bg: '#c6f6d5', color: '#276749' };
+  if (absZ < 2)  return { label: 'Within ±2σ',  pct: '95%',   bg: '#bee3f8', color: '#2c5282' };
+  if (absZ < 3)  return { label: 'Within ±3σ',  pct: '99.7%', bg: '#e9d8fd', color: '#553c9a' };
+  return             { label: 'Beyond ±3σ',      pct: '<0.3%', bg: '#fed7d7', color: '#742a2a' };
 }
 
 function letterGrade(g) {
@@ -594,6 +827,17 @@ function letterGrade(g) {
 }
 
 function updateTable() {
+  const grades = getAllGrades();
+  const params = state.scaler !== 'none' ? getScalerParams(grades) : null;
+  const scalerColNames = { standard: 'Std Scaled', minmax: 'Min-Max', robust: 'Robust' };
+
+  // Rebuild header
+  const thead = document.getElementById('tableHead');
+  thead.innerHTML = `
+    <th>Student</th><th>Grade</th><th>z-score</th><th>Region</th>
+    ${params ? `<th>${scalerColNames[state.scaler]}</th>` : ''}
+  `;
+
   const tbody = document.getElementById('studentTableBody');
   tbody.innerHTML = STUDENTS.map((s, i) => {
     const g    = studentGrade(s, state.mu, state.sigma);
@@ -601,12 +845,21 @@ function updateTable() {
     const ri   = regionInfo(Math.abs(z));
     const sel  = state.selected === i ? 'selected' : '';
     const sign = z >= 0 ? '+' : '';
+
+    let scaledCell = '';
+    if (params) {
+      const sv = applyScaler(g, params, state.scaler);
+      const svSign = sv >= 0 ? '+' : '';
+      scaledCell = `<td><span class="z-val" style="color:${s.color}">${svSign}${sv.toFixed(3)}</span></td>`;
+    }
+
     return `
       <tr class="${sel}" onclick="selectStudent(${i})">
         <td><span class="dot" style="background:${s.color}"></span>${s.name}</td>
         <td><span class="grade-val">${g.toFixed(1)}</span> <small style="color:var(--muted)">${letterGrade(g)}</small></td>
         <td><span class="z-val" style="color:${s.color}">${sign}${z.toFixed(2)}σ</span></td>
         <td><span class="region-badge" style="background:${ri.bg};color:${ri.color}">${ri.label}</span></td>
+        ${scaledCell}
       </tr>`;
   }).join('');
 }
@@ -637,10 +890,31 @@ function updateDetail() {
   const ri = regionInfo(Math.abs(z));
   const letter = letterGrade(g);
   const letterColors = { A:'#276749', B:'#2c5282', C:'#744210', D:'#744210', F:'#742a2a' };
-
   const direction = z > 0.05 ? 'ABOVE' : z < -0.05 ? 'BELOW' : 'AT';
   const verdictClass = z > 0.05 ? 'above' : z < -0.05 ? 'below' : 'at';
   const absZ = Math.abs(z);
+
+  let scaledStep = '';
+  if (state.scaler !== 'none') {
+    const grades = getAllGrades();
+    const params = getScalerParams(grades);
+    const sv = applyScaler(g, params, state.scaler);
+    const svSign = sv >= 0 ? '+' : '';
+    const scalerTitles = { standard: 'Standard Scaler', minmax: 'Min-Max Scaler', robust: 'Robust Scaler' };
+    let formula;
+    if (state.scaler === 'standard') {
+      formula = `x′ = (x − μ̂) / σ̂ = (${g.toFixed(1)} − ${params.mean.toFixed(1)}) / ${params.std.toFixed(1)} = <span class="highlight" style="color:${s.color}">${svSign}${sv.toFixed(3)}</span>`;
+    } else if (state.scaler === 'minmax') {
+      formula = `x′ = (x − min) / (max − min)<br>= (${g.toFixed(1)} − ${params.min.toFixed(1)}) / ${(params.max - params.min).toFixed(1)} = <span class="highlight" style="color:${s.color}">${sv.toFixed(3)}</span>`;
+    } else {
+      formula = `x′ = (x − median) / IQR = (${g.toFixed(1)} − ${params.median.toFixed(1)}) / ${params.iqr.toFixed(1)} = <span class="highlight" style="color:${s.color}">${svSign}${sv.toFixed(3)}</span>`;
+    }
+    scaledStep = `
+      <div class="calc-step">
+        <div class="calc-step-label">Step 4 — ${scalerTitles[state.scaler]}</div>
+        <div class="calc-formula">${formula}</div>
+      </div>`;
+  }
 
   el.innerHTML = `
     <div class="detail-name" style="color:${s.color}">${s.name}</div>
@@ -681,12 +955,34 @@ function updateDetail() {
         Std Dev (σ) = ${sigma.toFixed(1)}<br>
         ${s.name}'s grade = ${mu.toFixed(1)} ${sign} ${Math.abs(diff).toFixed(1)} = <strong>${g.toFixed(1)}</strong>
       </div>
-    </div>`;
+    </div>
+    ${scaledStep}`;
 }
 
 // ══════════════════════════════════════════════════════
-//  DISTRIBUTION SWITCHER
+//  CONTROLS
 // ══════════════════════════════════════════════════════
+
+function toggleShowDots() {
+  state.showDots = !state.showDots;
+  document.getElementById('showDotsBtn').classList.toggle('active', state.showDots);
+  redraw();
+}
+
+function setScaler(type) {
+  state.scaler = type;
+  document.querySelectorAll('.scaler-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.scaler === type);
+  });
+  const card = document.getElementById('scalerCard');
+  if (type === 'none') {
+    card.style.display = 'none';
+  } else {
+    card.style.display = 'block';
+    document.getElementById('scalerCardTitle').textContent = SCALER_TITLES[type];
+  }
+  redraw(); updateTable(); updateDetail();
+}
 
 function setDist(id) {
   state.distId = id;
@@ -697,6 +993,7 @@ function setDist(id) {
   document.getElementById('dragHint').textContent =
     hasPeak ? '◆ drag mean  ● drag σ handle  ▲ drag peak height'
             : '◆ drag mean  ● drag σ handle';
+  generateBaseData();
   redraw(); updateTable(); updateDetail();
 }
 
@@ -705,6 +1002,7 @@ function setDist(id) {
 // ══════════════════════════════════════════════════════
 
 window.addEventListener('resize', () => redraw());
+generateBaseData();
 updateTable();
 updateDetail();
 redraw();
