@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SigmaSim — Standard Deviation Explorer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f0f4f8; --card: #fff; --primary: #4361ee;
+      --text: #1a202c; --muted: #718096; --border: #e2e8f0;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    header { background: linear-gradient(135deg,#4361ee,#7209b7); color:#fff; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
+    header h1 { font-size:1.5rem; font-weight:800; letter-spacing:-0.02em; }
+    header .subtitle { font-size:.78rem; opacity:.85; margin-top:2px; }
+    header .tagline { font-size:.75rem; opacity:.8; text-align:right; max-width:260px; line-height:1.5; }
+
+    .page { max-width:1280px; margin:0 auto; padding:1rem; display:flex; flex-direction:column; gap:1rem; }
+
+    /* Top bar */
+    .top-bar { background:var(--card); border-radius:12px; padding:.8rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,.08); display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; }
+    .dist-btn { padding:.4rem .85rem; border:2px solid var(--border); border-radius:20px; cursor:pointer; font-size:.8rem; font-weight:600; color:var(--muted); transition:all .15s; background:#fff; }
+    .dist-btn:hover { border-color:#cbd5e0; color:var(--text); }
+    .dist-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .sep { width:1px; height:24px; background:var(--border); }
+    .stat-pill { display:flex; align-items:center; gap:.4rem; font-size:.82rem; }
+    .stat-pill label { color:var(--muted); font-weight:500; }
+    .stat-pill .val { font-weight:800; color:var(--primary); min-width:2.8rem; }
+    .hint { margin-left:auto; font-size:.72rem; color:var(--muted); font-style:italic; }
+
+    /* Canvas card */
+    .canvas-card { background:var(--card); border-radius:12px; padding:1rem 1rem .5rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .card-title { font-size:.7rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.5rem; }
+    #distCanvas { width:100%; display:block; cursor:default; }
+
+    /* Bottom grid */
+    .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    @media(max-width:820px){ .bottom-grid{grid-template-columns:1fr} }
+
+    /* Student table */
+    .table-card { background:var(--card); border-radius:12px; padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .student-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    .student-table th { text-align:left; font-size:.67rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; padding:.4rem .6rem; border-bottom:2px solid var(--border); }
+    .student-table td { padding:.45rem .6rem; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s; }
+    .student-table tr:hover td { background:#f7fafc; }
+    .student-table tr.selected td { background:#eef2ff; }
+    .student-table tr:last-child td { border-bottom:none; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.35rem; vertical-align:middle; }
+    .grade-val { font-weight:700; font-family:'Courier New',monospace; }
+    .z-val { font-weight:700; font-family:'Courier New',monospace; }
+    .region-badge { font-size:.65rem; padding:1px 6px; border-radius:10px; font-weight:600; }
+
+    /* Detail panel */
+    .detail-card { background:var(--card); border-radius:12px; padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .detail-empty { color:var(--muted); font-size:.85rem; text-align:center; padding:2rem 0; }
+    .detail-name { font-size:1.1rem; font-weight:800; margin-bottom:.1rem; }
+    .detail-grade { font-size:.8rem; color:var(--muted); margin-bottom:1rem; }
+    .calc-step { margin-bottom:.85rem; }
+    .calc-step-label { font-size:.67rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.25rem; }
+    .calc-formula { background:#f7fafc; border-radius:6px; padding:.5rem .7rem; font-family:'Courier New',monospace; font-size:.85rem; border-left:3px solid var(--border); }
+    .calc-formula .highlight { font-weight:900; }
+    .verdict { margin-top:1rem; padding:.65rem .8rem; border-radius:8px; font-size:.82rem; font-weight:600; line-height:1.5; }
+    .verdict.above { background:#f0fff4; border-left:3px solid #27ae60; color:#276749; }
+    .verdict.below { background:#fff5f5; border-left:3px solid #e53e3e; color:#742a2a; }
+    .verdict.at    { background:#ebf8ff; border-left:3px solid #3182ce; color:#2c5282; }
+    .letter-grade { display:inline-block; font-size:1.4rem; font-weight:900; margin-right:.5rem; }
+    .region-info { font-size:.75rem; color:var(--muted); margin-top:.4rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SigmaSim</h1>
+    <div class="subtitle">Standard Deviation Explorer</div>
+  </div>
+  <div class="tagline">Drag the curve to reshape it — watch how student grades shift with μ and σ</div>
+</header>
+
+<div class="page">
+
+  <!-- Distribution picker + readout -->
+  <div class="top-bar">
+    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Distribution:</span>
+    <button class="dist-btn active" data-dist="normal"   onclick="setDist('normal')">Normal</button>
+    <button class="dist-btn"        data-dist="rskew"    onclick="setDist('rskew')">Right-Skewed</button>
+    <button class="dist-btn"        data-dist="lskew"    onclick="setDist('lskew')">Left-Skewed</button>
+    <button class="dist-btn"        data-dist="uniform"  onclick="setDist('uniform')">Uniform</button>
+    <button class="dist-btn"        data-dist="bimodal"  onclick="setDist('bimodal')">Bimodal</button>
+    <div class="sep"></div>
+    <div class="stat-pill"><label>μ (mean)</label><span class="val" id="muVal">72.0</span></div>
+    <div class="stat-pill"><label>σ (std dev)</label><span class="val" id="sigVal">12.0</span></div>
+    <div class="hint" id="dragHint">◆ drag mean &nbsp;●  drag σ handle &nbsp;▲ drag peak height (Normal only)</div>
+  </div>
+
+  <!-- Interactive canvas -->
+  <div class="canvas-card">
+    <div class="card-title">Exam Grade Distribution — drag the handles to reshape</div>
+    <canvas id="distCanvas" height="320"></canvas>
+  </div>
+
+  <!-- Students + Detail -->
+  <div class="bottom-grid">
+
+    <div class="table-card">
+      <div class="card-title">Sample Students</div>
+      <table class="student-table">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Grade</th>
+            <th>z-score</th>
+            <th>Region</th>
+          </tr>
+        </thead>
+        <tbody id="studentTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="detail-card">
+      <div class="card-title">Standard Deviation Calculation</div>
+      <div id="detailPanel">
+        <div class="detail-empty">Click a student in the table or on the graph to see the step-by-step calculation.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CANVAS LAYOUT CONSTANTS
+// ══════════════════════════════════════════════════════
+
+const PLOT_TOP  = 14;
+const AX_Y      = 248;
+const PLOT_H    = AX_Y - PLOT_TOP;       // 234
+const PAD_L     = 54;
+const PAD_R     = 28;
+const SIGMA_MIN = 4;
+const SIGMA_MAX = 28;
+const MU_MIN    = 12;
+const MU_MAX    = 88;
+const SIGMA_REF = 5;
+// Y_SCALE: density × Y_SCALE = canvas pixels. Calibrated so σ=SIGMA_REF fills 87% of PLOT_H
+const Y_SCALE   = PLOT_H * 0.87 * SIGMA_REF * Math.sqrt(2 * Math.PI);
+
+// ══════════════════════════════════════════════════════
+//  DISTRIBUTIONS
+// ══════════════════════════════════════════════════════
+
+const SQRT2PI = Math.sqrt(2 * Math.PI);
+
+function normalPDF(x, mu, sigma) {
+  return Math.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * SQRT2PI);
+}
+
+function uniformPDF(x, mu, sigma) {
+  const half = sigma * Math.SQRT2 * Math.sqrt(3) * 0.5;  // = sigma * sqrt(3)
+  return (x >= mu - half && x <= mu + half) ? 1 / (2 * half) : 0;
+}
+
+// Split-normal: narrow left, wide right → right-skewed
+function rskewPDF(x, mu, sigma) {
+  const sL = 0.55 * sigma, sR = 1.55 * sigma;
+  const C = Math.sqrt(2 / Math.PI) / (sL + sR);
+  if (x < mu) return C * Math.exp(-0.5 * ((x - mu) / sL) ** 2) * 2;
+  else         return C * Math.exp(-0.5 * ((x - mu) / sR) ** 2) * 2;
+}
+
+// Mirror: wide left, narrow right → left-skewed
+function lskewPDF(x, mu, sigma) { return rskewPDF(2 * mu - x, mu, sigma); }
+
+// Bimodal: two sub-peaks centred at mu ± 0.9σ, sub-sigma 0.4σ
+function bimodalPDF(x, mu, sigma) {
+  return 0.5 * normalPDF(x, mu - 0.9 * sigma, 0.4 * sigma)
+       + 0.5 * normalPDF(x, mu + 0.9 * sigma, 0.4 * sigma);
+}
+
+const DISTS = {
+  normal:  { label: 'Normal',       pdf: normalPDF,  peakHandle: true  },
+  rskew:   { label: 'Right-Skewed', pdf: rskewPDF,   peakHandle: false },
+  lskew:   { label: 'Left-Skewed',  pdf: lskewPDF,   peakHandle: false },
+  uniform: { label: 'Uniform',      pdf: uniformPDF, peakHandle: false },
+  bimodal: { label: 'Bimodal',      pdf: bimodalPDF, peakHandle: false },
+};
+
+// ══════════════════════════════════════════════════════
+//  STUDENTS  (fixed z-scores; grades = mu + z*sigma)
+// ══════════════════════════════════════════════════════
+
+const STUDENTS = [
+  { name: 'Alice',  z: -2.0, color: '#e53e3e' },
+  { name: 'Bob',    z: -1.2, color: '#dd6b20' },
+  { name: 'Carol',  z: -0.4, color: '#d69e2e' },
+  { name: 'Dave',   z: +0.3, color: '#38a169' },
+  { name: 'Eve',    z: +1.0, color: '#3182ce' },
+  { name: 'Frank',  z: +1.7, color: '#6b46c1' },
+  { name: 'Grace',  z: +2.5, color: '#b83280' },
+];
+
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+function studentGrade(student, mu, sigma) {
+  return clamp(mu + student.z * sigma, 0, 100);
+}
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+
+const state = { mu: 72, sigma: 12, distId: 'normal', selected: null };
+
+// ══════════════════════════════════════════════════════
+//  SCALE HELPERS
+// ══════════════════════════════════════════════════════
+
+function makeScale(W) {
+  const plotW = W - PAD_L - PAD_R;
+  const toX  = v   => PAD_L + (v / 100) * plotW;
+  const toV  = px  => (px - PAD_L) / plotW * 100;
+  const toY  = dens => AX_Y - dens * Y_SCALE;
+  return { toX, toV, toY };
+}
+
+// ══════════════════════════════════════════════════════
+//  DRAWING
+// ══════════════════════════════════════════════════════
+
+function redraw() {
+  const canvas = document.getElementById('distCanvas');
+  canvas.width  = canvas.offsetWidth || 900;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const sc  = makeScale(W);
+  const pdf = DISTS[state.distId].pdf;
+
+  drawSigmaRegions(ctx, sc, pdf);
+  drawCurve(ctx, sc, pdf);
+  drawAxis(ctx, W, sc);
+  drawSigmaLines(ctx, sc);
+  drawMeanLine(ctx, sc);
+  drawSigmaAnnotations(ctx, W, sc);
+  drawStudentDots(ctx, sc);
+  if (state.selected !== null) drawStudentAnnotation(ctx, sc, state.selected);
+  drawHandles(ctx, sc, pdf);
+}
+
+// ── σ coloured region fills ──────────────────────────
+
+function fillRegion(ctx, sc, pdf, lo, hi, color) {
+  const { toX, toY } = sc;
+  const a = Math.max(0, lo), b = Math.min(100, hi);
+  if (b <= a) return;
+  const STEPS = 120;
+  ctx.beginPath();
+  ctx.moveTo(toX(a), AX_Y);
+  for (let i = 0; i <= STEPS; i++) {
+    const x = a + (b - a) * i / STEPS;
+    ctx.lineTo(toX(x), toY(pdf(x, state.mu, state.sigma)));
+  }
+  ctx.lineTo(toX(b), AX_Y);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawSigmaRegions(ctx, sc, pdf) {
+  const { mu, sigma } = state;
+  fillRegion(ctx, sc, pdf, mu - 3 * sigma, mu + 3 * sigma, 'rgba(67,97,238,0.06)');
+  fillRegion(ctx, sc, pdf, mu - 2 * sigma, mu - sigma,     'rgba(67,97,238,0.11)');
+  fillRegion(ctx, sc, pdf, mu + sigma,     mu + 2 * sigma, 'rgba(67,97,238,0.11)');
+  fillRegion(ctx, sc, pdf, mu - sigma,     mu + sigma,     'rgba(67,97,238,0.22)');
+}
+
+// ── distribution curve ───────────────────────────────
+
+function drawCurve(ctx, sc, pdf) {
+  const { toX, toY } = sc;
+  const { mu, sigma } = state;
+  const STEPS = 300;
+
+  ctx.beginPath();
+  ctx.moveTo(toX(0), AX_Y);
+  for (let i = 0; i <= STEPS; i++) {
+    const x = i / STEPS * 100;
+    ctx.lineTo(toX(x), toY(pdf(x, mu, sigma)));
+  }
+  ctx.lineTo(toX(100), AX_Y);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(67,97,238,0.08)';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i <= STEPS; i++) {
+    const x = i / STEPS * 100;
+    const y = toY(pdf(x, mu, sigma));
+    i === 0 ? ctx.moveTo(toX(x), y) : ctx.lineTo(toX(x), y);
+  }
+  ctx.strokeStyle = '#4361ee';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+}
+
+// ── axis ─────────────────────────────────────────────
+
+function drawAxis(ctx, W, sc) {
+  const { toX } = sc;
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD_L, AX_Y); ctx.lineTo(W - PAD_R, AX_Y); ctx.stroke();
+  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  for (let v = 0; v <= 100; v += 10) {
+    const x = toX(v);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.beginPath(); ctx.moveTo(x, AX_Y); ctx.lineTo(x, AX_Y + 4); ctx.stroke();
+    ctx.fillText(v, x, AX_Y + 14);
+  }
+  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('Exam Grade', (PAD_L + W - PAD_R) / 2, AX_Y + 26);
+}
+
+// ── mean + sigma dashed lines ────────────────────────
+
+function drawMeanLine(ctx, sc) {
+  const { toX } = sc;
+  const x = toX(state.mu);
+  ctx.strokeStyle = '#4361ee'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(x, PLOT_TOP); ctx.lineTo(x, AX_Y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#4361ee'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('μ', x, PLOT_TOP + 10);
+}
+
+function drawSigmaLines(ctx, sc) {
+  const { toX } = sc;
+  const { mu, sigma } = state;
+  [[1,'#4361ee'],[2,'#3182ce']].forEach(([k, color]) => {
+    [mu - k * sigma, mu + k * sigma].forEach(v => {
+      const x = toX(clamp(v, 0, 100));
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(x, PLOT_TOP + 20); ctx.lineTo(x, AX_Y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+    });
+  });
+}
+
+// ── σ bracket annotations below axis ────────────────
+
+function drawSigmaAnnotations(ctx, W, sc) {
+  const { toX } = sc;
+  const { mu, sigma } = state;
+
+  const drawBracket = (lo, hi, label, color, row) => {
+    const y = AX_Y + 38 + row * 22;
+    const a = toX(clamp(lo, 0, 100));
+    const b = toX(clamp(hi, 0, 100));
+    const mid = (a + b) / 2;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(a, y - 4); ctx.lineTo(a, y); ctx.lineTo(b, y); ctx.lineTo(b, y - 4);
+    ctx.stroke();
+    // arrow heads
+    [[a, 1], [b, -1]].forEach(([x, d]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x + d * 5, y - 3);
+      ctx.moveTo(x, y); ctx.lineTo(x + d * 5, y + 3);
+      ctx.stroke();
+    });
+    ctx.fillStyle = color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(label, mid, y - 7);
+  };
+
+  drawBracket(mu - sigma,     mu,             '−1σ', '#4361ee', 0);
+  drawBracket(mu,             mu + sigma,     '+1σ', '#4361ee', 0);
+  drawBracket(mu - 2 * sigma, mu + 2 * sigma, '± 2σ  (95%)', '#3182ce', 1);
+  drawBracket(mu - 3 * sigma, mu + 3 * sigma, '± 3σ  (99.7%)', '#6b46c1', 2);
+}
+
+// ── student dots on axis ─────────────────────────────
+
+function drawStudentDots(ctx, sc) {
+  const { toX } = sc;
+  STUDENTS.forEach((s, i) => {
+    const g = studentGrade(s, state.mu, state.sigma);
+    const x = toX(g);
+    const selected = state.selected === i;
+    ctx.fillStyle = s.color;
+    ctx.strokeStyle = selected ? '#fff' : 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = selected ? 2.5 : 1.5;
+    ctx.beginPath(); ctx.arc(x, AX_Y - 1, selected ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Name label on hover / selected
+    if (selected) {
+      ctx.fillStyle = s.color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(s.name, x, AX_Y - 12);
+    }
+  });
+}
+
+// ── selected student full annotation ────────────────
+
+function drawStudentAnnotation(ctx, sc, idx) {
+  const { toX, toY } = sc;
+  const s = STUDENTS[idx];
+  const pdf = DISTS[state.distId].pdf;
+  const g = studentGrade(s, state.mu, state.sigma);
+  const gx = toX(g), mx = toX(state.mu);
+  const curveY = toY(pdf(g, state.mu, state.sigma));
+
+  // Vertical dotted line up to curve
+  ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(gx, AX_Y - 9); ctx.lineTo(gx, Math.max(curveY, PLOT_TOP + 5)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Horizontal bracket from mean to grade
+  if (Math.abs(gx - mx) > 4) {
+    const by = AX_Y - 28;
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mx, by); ctx.lineTo(gx, by); ctx.stroke();
+    [mx, gx].forEach(bx => {
+      ctx.beginPath(); ctx.moveTo(bx, by - 5); ctx.lineTo(bx, by + 5); ctx.stroke();
+    });
+    // z-score label
+    const z = s.z;
+    const sign = z >= 0 ? '+' : '';
+    ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(`${sign}${z.toFixed(2)}σ`, (mx + gx) / 2, by - 7);
+    // Actual point diff label
+    const diff = g - state.mu;
+    ctx.font = '9px system-ui';
+    ctx.fillText(`${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pts`, (mx + gx) / 2, by + 16);
+  }
+
+  // Grade label below axis
+  ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(g.toFixed(1), gx, AX_Y + 14);
+}
+
+// ── interactive handles ──────────────────────────────
+
+function peakY(sc) {
+  return AX_Y - DISTS[state.distId].pdf(state.mu, state.mu, state.sigma) * Y_SCALE;
+}
+
+function drawHandles(ctx, sc) {
+  const { toX } = sc;
+  const mX = toX(state.mu);
+  const sX = toX(state.mu + state.sigma);
+  const pY = peakY(sc);
+
+  // Mean handle — blue diamond on axis
+  ctx.fillStyle = '#4361ee'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(mX,     AX_Y + 3);
+  ctx.lineTo(mX + 8, AX_Y + 11);
+  ctx.lineTo(mX,     AX_Y + 19);
+  ctx.lineTo(mX - 8, AX_Y + 11);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  // Sigma handle — green circle to the right
+  ctx.fillStyle = '#27ae60'; ctx.strokeStyle = '#fff';
+  ctx.beginPath(); ctx.arc(sX, AX_Y + 11, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('σ', sX, AX_Y + 15);
+
+  // Peak handle — red upward triangle (Normal only)
+  if (DISTS[state.distId].peakHandle) {
+    ctx.fillStyle = '#e74c3c'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mX,      pY - 11);
+    ctx.lineTo(mX + 8,  pY + 1);
+    ctx.lineTo(mX - 8,  pY + 1);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  HIT TESTING
+// ══════════════════════════════════════════════════════
+
+function getHandle(cx, cy, W) {
+  const sc = makeScale(W);
+  const { toX } = sc;
+  const mX = toX(state.mu), sX = toX(state.mu + state.sigma), pY = peakY(sc);
+  if (Math.hypot(cx - mX, cy - (AX_Y + 11)) < 13) return 'mean';
+  if (Math.hypot(cx - sX, cy - (AX_Y + 11)) < 13) return 'sigma';
+  if (DISTS[state.distId].peakHandle && Math.hypot(cx - mX, cy - (pY - 5)) < 13) return 'peak';
+  return null;
+}
+
+function getStudentHit(cx, cy, W) {
+  const { toX } = makeScale(W);
+  for (let i = 0; i < STUDENTS.length; i++) {
+    const g = studentGrade(STUDENTS[i], state.mu, state.sigma);
+    if (Math.hypot(cx - toX(g), cy - AX_Y) < 11) return i;
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════
+//  DRAG INTERACTION
+// ══════════════════════════════════════════════════════
+
+let drag = null; // { handle, startX, startY, startMu, startSigma }
+
+function canvasCoords(e, canvas) {
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / r.width;
+  const scaleY = canvas.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return [(src.clientX - r.left) * scaleX, (src.clientY - r.top) * scaleY];
+}
+
+function onDown(e) {
+  const canvas = document.getElementById('distCanvas');
+  const [cx, cy] = canvasCoords(e, canvas);
+  const handle = getHandle(cx, cy, canvas.width);
+  if (handle) {
+    drag = { handle, startX: cx, startY: cy, startMu: state.mu, startSigma: state.sigma };
+    e.preventDefault();
+    return;
+  }
+  const idx = getStudentHit(cx, cy, canvas.width);
+  if (idx !== null) {
+    state.selected = state.selected === idx ? null : idx;
+    redraw(); updateTable(); updateDetail();
+  }
+}
+
+function onMove(e) {
+  const canvas = document.getElementById('distCanvas');
+  const [cx, cy] = canvasCoords(e, canvas);
+
+  if (drag) {
+    const sc = makeScale(canvas.width);
+    const dx = cx - drag.startX;
+    const dy = cy - drag.startY;
+
+    if (drag.handle === 'mean') {
+      state.mu = clamp(drag.startMu + sc.toV(PAD_L + dx) - sc.toV(PAD_L), MU_MIN, MU_MAX);
+    } else if (drag.handle === 'sigma') {
+      state.sigma = clamp(sc.toV(cx) - state.mu, SIGMA_MIN, SIGMA_MAX);
+    } else if (drag.handle === 'peak') {
+      const h = Math.max(8, AX_Y - cy);
+      state.sigma = clamp(PLOT_H * 0.87 * SIGMA_REF / h, SIGMA_MIN, SIGMA_MAX);
+    }
+
+    document.getElementById('muVal').textContent  = state.mu.toFixed(1);
+    document.getElementById('sigVal').textContent = state.sigma.toFixed(1);
+    redraw(); updateTable(); updateDetail();
+    e.preventDefault();
+    return;
+  }
+
+  // Cursor hint
+  const h = getHandle(cx, cy, canvas.width);
+  const s = !h ? getStudentHit(cx, cy, canvas.width) : null;
+  canvas.style.cursor = h === 'peak' ? 'ns-resize'
+                      : h ? 'ew-resize'
+                      : s !== null ? 'pointer' : 'default';
+}
+
+function onUp() { drag = null; }
+
+const canvas = document.getElementById('distCanvas');
+canvas.addEventListener('mousedown',  onDown);
+canvas.addEventListener('mousemove',  onMove);
+canvas.addEventListener('mouseup',    onUp);
+canvas.addEventListener('mouseleave', onUp);
+canvas.addEventListener('touchstart', onDown, { passive: false });
+canvas.addEventListener('touchmove',  onMove, { passive: false });
+canvas.addEventListener('touchend',   onUp);
+
+// ══════════════════════════════════════════════════════
+//  STUDENT TABLE
+// ══════════════════════════════════════════════════════
+
+function regionInfo(absZ) {
+  if (absZ < 1)  return { label: 'Within ±1σ',     pct: '68%',   bg: '#c6f6d5', color: '#276749' };
+  if (absZ < 2)  return { label: 'Within ±2σ',     pct: '95%',   bg: '#bee3f8', color: '#2c5282' };
+  if (absZ < 3)  return { label: 'Within ±3σ',     pct: '99.7%', bg: '#e9d8fd', color: '#553c9a' };
+  return             { label: 'Beyond ±3σ',         pct: '<0.3%', bg: '#fed7d7', color: '#742a2a' };
+}
+
+function letterGrade(g) {
+  return g >= 90 ? 'A' : g >= 80 ? 'B' : g >= 70 ? 'C' : g >= 60 ? 'D' : 'F';
+}
+
+function updateTable() {
+  const tbody = document.getElementById('studentTableBody');
+  tbody.innerHTML = STUDENTS.map((s, i) => {
+    const g    = studentGrade(s, state.mu, state.sigma);
+    const z    = (g - state.mu) / state.sigma;
+    const ri   = regionInfo(Math.abs(z));
+    const sel  = state.selected === i ? 'selected' : '';
+    const sign = z >= 0 ? '+' : '';
+    return `
+      <tr class="${sel}" onclick="selectStudent(${i})">
+        <td><span class="dot" style="background:${s.color}"></span>${s.name}</td>
+        <td><span class="grade-val">${g.toFixed(1)}</span> <small style="color:var(--muted)">${letterGrade(g)}</small></td>
+        <td><span class="z-val" style="color:${s.color}">${sign}${z.toFixed(2)}σ</span></td>
+        <td><span class="region-badge" style="background:${ri.bg};color:${ri.color}">${ri.label}</span></td>
+      </tr>`;
+  }).join('');
+}
+
+function selectStudent(i) {
+  state.selected = state.selected === i ? null : i;
+  redraw(); updateTable(); updateDetail();
+}
+
+// ══════════════════════════════════════════════════════
+//  DETAIL PANEL
+// ══════════════════════════════════════════════════════
+
+function updateDetail() {
+  const el = document.getElementById('detailPanel');
+  if (state.selected === null) {
+    el.innerHTML = `<div class="detail-empty">Click a student in the table or on the graph to see the step-by-step calculation.</div>`;
+    return;
+  }
+
+  const s  = STUDENTS[state.selected];
+  const g  = studentGrade(s, state.mu, state.sigma);
+  const mu = state.mu, sigma = state.sigma;
+  const diff = g - mu;
+  const z    = diff / sigma;
+  const sign = diff >= 0 ? '+' : '';
+  const zSign = z >= 0 ? '+' : '';
+  const ri = regionInfo(Math.abs(z));
+  const letter = letterGrade(g);
+  const letterColors = { A:'#276749', B:'#2c5282', C:'#744210', D:'#744210', F:'#742a2a' };
+
+  const direction = z > 0.05 ? 'ABOVE' : z < -0.05 ? 'BELOW' : 'AT';
+  const verdictClass = z > 0.05 ? 'above' : z < -0.05 ? 'below' : 'at';
+  const absZ = Math.abs(z);
+
+  el.innerHTML = `
+    <div class="detail-name" style="color:${s.color}">${s.name}</div>
+    <div class="detail-grade">Exam grade: <strong>${g.toFixed(1)}</strong> &nbsp;·&nbsp; Letter: <strong style="color:${letterColors[letter]}">${letter}</strong></div>
+
+    <div class="calc-step">
+      <div class="calc-step-label">Step 1 — Distance from the mean</div>
+      <div class="calc-formula">
+        x − μ &nbsp;=&nbsp; ${g.toFixed(1)} − ${mu.toFixed(1)} &nbsp;=&nbsp;
+        <span class="highlight" style="color:${s.color}">${sign}${diff.toFixed(1)} points</span>
+      </div>
+    </div>
+
+    <div class="calc-step">
+      <div class="calc-step-label">Step 2 — Convert to standard deviation units</div>
+      <div class="calc-formula">
+        z &nbsp;=&nbsp; (x − μ) ÷ σ &nbsp;=&nbsp; ${sign}${diff.toFixed(1)} ÷ ${sigma.toFixed(1)} &nbsp;=&nbsp;
+        <span class="highlight" style="color:${s.color}">${zSign}${z.toFixed(3)}</span>
+      </div>
+    </div>
+
+    <div class="calc-step">
+      <div class="calc-step-label">Step 3 — Interpret the z-score</div>
+      <div class="verdict ${verdictClass}">
+        <span class="letter-grade" style="color:${letterColors[letter]}">${letter}</span>
+        <strong>${s.name}</strong> is <strong>${absZ.toFixed(2)} standard deviation${absZ !== 1 ? 's' : ''}</strong>
+        ${direction} the class average.<br>
+        <span class="region-info">
+          Region: <strong>${ri.label}</strong> — about <strong>${ri.pct}</strong> of students fall within ±${Math.ceil(Math.abs(z))}σ of the mean.
+        </span>
+      </div>
+    </div>
+
+    <div class="calc-step">
+      <div class="calc-step-label">The numbers</div>
+      <div class="calc-formula">
+        Mean (μ) = ${mu.toFixed(1)} &nbsp;·&nbsp;
+        Std Dev (σ) = ${sigma.toFixed(1)}<br>
+        ${s.name}'s grade = ${mu.toFixed(1)} ${sign} ${Math.abs(diff).toFixed(1)} = <strong>${g.toFixed(1)}</strong>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  DISTRIBUTION SWITCHER
+// ══════════════════════════════════════════════════════
+
+function setDist(id) {
+  state.distId = id;
+  document.querySelectorAll('.dist-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.dist === id);
+  });
+  const hasPeak = DISTS[id].peakHandle;
+  document.getElementById('dragHint').textContent =
+    hasPeak ? '◆ drag mean  ● drag σ handle  ▲ drag peak height'
+            : '◆ drag mean  ● drag σ handle';
+  redraw(); updateTable(); updateDetail();
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+
+window.addEventListener('resize', () => redraw());
+updateTable();
+updateDetail();
+redraw();
+</script>
+</body>
+</html>
