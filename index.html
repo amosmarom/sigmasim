@@ -101,6 +101,8 @@
     <div class="stat-pill"><label>σ (std dev)</label><span class="val" id="sigVal">12.0</span></div>
     <div class="sep"></div>
     <button class="toggle-btn" id="showDotsBtn" onclick="toggleShowDots()">Show All Points</button>
+    <button class="toggle-btn" id="showPDFBtn"  onclick="toggleShowPDF()">Show PDF</button>
+    <button class="toggle-btn" id="showCDFBtn"  onclick="toggleShowCDF()">Show CDF</button>
     <div class="sep"></div>
     <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
     <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')">None</button>
@@ -229,7 +231,7 @@ function studentGrade(student, mu, sigma) {
 //  STATE
 // ══════════════════════════════════════════════════════
 
-const state = { mu: 72, sigma: 12, distId: 'normal', selected: null, showDots: false, scaler: 'none' };
+const state = { mu: 72, sigma: 12, distId: 'normal', selected: null, showDots: false, scaler: 'none', showPDF: false, showCDF: false, cdfA: 60, cdfB: 84 };
 
 // ══════════════════════════════════════════════════════
 //  DATA POINTS (N=200, stable z-scores per distribution)
@@ -351,7 +353,9 @@ function redraw() {
     drawSigmaLines(ctx, sc);
     drawMeanLine(ctx, sc);
     drawSigmaAnnotations(ctx, W, sc);
+    if (state.showPDF) drawPDFAnnotations(ctx, W, sc.toY, pdf(state.mu, state.mu, state.sigma));
     if (state.showDots) drawDataPoints(ctx, sc);
+    if (state.showCDF) drawCDFOverlay(ctx, W, sc);
     drawStudentDots(ctx, sc);
     if (state.selected !== null) drawStudentAnnotation(ctx, sc, state.selected);
     drawHandles(ctx, sc, pdf);
@@ -576,6 +580,9 @@ function drawScaledMode(ctx, W) {
     ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
     ctx.fillText(sv.toFixed(3), x, AX_Y + 14);
   }
+
+  // ── PDF y-axis (scaled space) ──
+  if (state.showPDF) drawPDFAnnotations(ctx, W, toY, maxPdfSc);
 
   // ── hint: handles disabled in scaled mode ──
   ctx.fillStyle = '#a0aec0'; ctx.font = 'italic 9px system-ui'; ctx.textAlign = 'right';
@@ -946,6 +953,179 @@ function drawScalerCanvas() {
 }
 
 // ══════════════════════════════════════════════════════
+//  PDF ANNOTATIONS
+// ══════════════════════════════════════════════════════
+
+function drawPDFAnnotations(ctx, W, toY, maxDens) {
+  // Left y-axis line
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD_L, PLOT_TOP); ctx.lineTo(PAD_L, AX_Y); ctx.stroke();
+
+  // Tick marks and density labels
+  const nTicks = 5;
+  ctx.font = '8px system-ui'; ctx.textAlign = 'right';
+  for (let k = 0; k <= nTicks; k++) {
+    const d = maxDens * k / nTicks;
+    const y = toY(d);
+    if (y < PLOT_TOP - 2 || y > AX_Y + 2) continue;
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD_L - 4, y); ctx.lineTo(PAD_L, y); ctx.stroke();
+    if (k > 0) {
+      ctx.fillStyle = '#a0aec0';
+      ctx.fillText(d.toFixed(3), PAD_L - 6, y + 3);
+    }
+  }
+
+  // Rotated y-axis label
+  ctx.save();
+  ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  ctx.translate(11, (PLOT_TOP + AX_Y) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('density f(x)', 0, 0);
+  ctx.restore();
+
+  // Peak label on the curve
+  const peakY2 = toY(maxDens);
+  ctx.fillStyle = '#4361ee'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText(`f(peak) = ${maxDens.toFixed(4)}`, PAD_L + 8, Math.max(PLOT_TOP + 16, peakY2 - 5));
+}
+
+// ══════════════════════════════════════════════════════
+//  CDF COMPUTATION
+// ══════════════════════════════════════════════════════
+
+let _cdfCache = null;
+
+function ensureCDF() {
+  const { mu, sigma, distId } = state;
+  if (_cdfCache && _cdfCache.mu === mu && _cdfCache.sigma === sigma && _cdfCache.distId === distId) return _cdfCache;
+  const pdf = DISTS[distId].pdf;
+  const N = 1000;
+  const dx = 100 / N;
+  const table = new Float64Array(N + 1);
+  table[0] = 0;
+  for (let i = 1; i <= N; i++) {
+    const x0 = (i-1)*dx, x1 = i*dx;
+    table[i] = table[i-1] + (pdf(x0, mu, sigma) + pdf(x1, mu, sigma)) * 0.5 * dx;
+  }
+  const tot = table[N] || 1;
+  for (let i = 0; i <= N; i++) table[i] /= tot;
+  _cdfCache = { mu, sigma, distId, table, dx, N };
+  return _cdfCache;
+}
+
+function evalCDF(x) {
+  const { table, dx, N } = ensureCDF();
+  const xi = clamp(x, 0, 100) / dx;
+  const i = Math.floor(xi);
+  if (i <= 0) return table[0];
+  if (i >= N) return table[N];
+  return table[i] + (table[i+1] - table[i]) * (xi - i);
+}
+
+// ══════════════════════════════════════════════════════
+//  CDF OVERLAY  (grade-space mode only)
+// ══════════════════════════════════════════════════════
+
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.arcTo(x+w,y, x+w,y+r, r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h, x+w-r,y+h, r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h, x,y+h-r, r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y, x+r,y, r);
+  ctx.closePath();
+}
+
+function drawCDFOverlay(ctx, W, sc) {
+  const { toX, toY } = sc;
+  const pdf = DISTS[state.distId].pdf;
+  const { mu, sigma } = state;
+
+  const a = Math.min(state.cdfA, state.cdfB);
+  const b = Math.max(state.cdfA, state.cdfB);
+
+  // CDF maps to canvas y: CDF=0 → AX_Y, CDF=1 → PLOT_TOP
+  const toCY = v => AX_Y - v * (AX_Y - PLOT_TOP);
+
+  // ── Shade area under PDF between a and b ──
+  ctx.beginPath(); ctx.moveTo(toX(a), AX_Y);
+  for (let i = 0; i <= 200; i++) {
+    const x = a + (b - a) * i / 200;
+    ctx.lineTo(toX(x), toY(pdf(x, mu, sigma)));
+  }
+  ctx.lineTo(toX(b), AX_Y); ctx.closePath();
+  ctx.fillStyle = 'rgba(249,115,22,0.22)'; ctx.fill();
+
+  // ── CDF S-curve ──
+  ctx.beginPath();
+  for (let i = 0; i <= 400; i++) {
+    const x = i / 400 * 100;
+    const y = toCY(evalCDF(x));
+    i === 0 ? ctx.moveTo(toX(x), y) : ctx.lineTo(toX(x), y);
+  }
+  ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.2; ctx.setLineDash([]); ctx.stroke();
+
+  // ── Right y-axis (CDF 0-1) ──
+  const rx = W - PAD_R;
+  ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+  ctx.beginPath(); ctx.moveTo(rx, PLOT_TOP); ctx.lineTo(rx, AX_Y); ctx.stroke();
+  ctx.globalAlpha = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+    const y = toCY(v);
+    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + 4, y); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#f97316'; ctx.font = '8px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(v.toFixed(2), rx + 6, y + 3);
+  });
+  ctx.fillStyle = '#f97316'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center';
+  ctx.save(); ctx.translate(W - 6, (PLOT_TOP + AX_Y) / 2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('CDF', 0, 0); ctx.restore();
+
+  // ── Vertical markers at a and b with CDF dots ──
+  [['a', state.cdfA, '#f97316'], ['b', state.cdfB, '#0d9488']].forEach(([lbl, xv, col]) => {
+    const x = toX(xv), cy2 = toCY(evalCDF(xv));
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([5,3]); ctx.globalAlpha = 0.75;
+    ctx.beginPath(); ctx.moveTo(x, PLOT_TOP + 18); ctx.lineTo(x, AX_Y); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    // CDF dot on the S-curve
+    ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, cy2, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    // Horizontal guide from CDF dot to y-axis
+    ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.setLineDash([3,3]); ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.moveTo(x, cy2); ctx.lineTo(rx, cy2); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(lbl, x, PLOT_TOP + 13);
+  });
+
+  // ── Drag handles below axis ──
+  const hY = AX_Y + 30;
+  [['cdfA', state.cdfA, '#f97316', 'a'], ['cdfB', state.cdfB, '#0d9488', 'b']].forEach(([, xv, col, lbl]) => {
+    const x = toX(xv);
+    ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, hY - 9); ctx.lineTo(x + 7, hY + 3); ctx.lineTo(x - 7, hY + 3);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(lbl, x, hY + 1);
+  });
+
+  // ── Info box ──
+  const cdfA2 = evalCDF(a), cdfB2 = evalCDF(b), prob = cdfB2 - cdfA2;
+  const bx = PAD_L + 8, by = PLOT_TOP + 8, bw = 148, bh = 72;
+  ctx.fillStyle = 'rgba(255,255,255,0.93)'; ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  rrect(ctx, bx, by, bw, bh, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f97316'; ctx.font = 'bold 10.5px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText(`P(a ≤ X ≤ b) = ${(prob*100).toFixed(1)}%`, bx+7, by+16);
+  ctx.fillStyle = '#718096'; ctx.font = '9px system-ui';
+  ctx.fillText(`a = ${state.cdfA.toFixed(1)}   CDF(a) = ${(cdfA2*100).toFixed(1)}%`, bx+7, by+31);
+  ctx.fillText(`b = ${state.cdfB.toFixed(1)}   CDF(b) = ${(cdfB2*100).toFixed(1)}%`, bx+7, by+44);
+  ctx.fillStyle = '#4361ee'; ctx.font = '8.5px system-ui';
+  ctx.fillText(`← drag ▲ handles to set a and b`, bx+7, by+60);
+}
+
+// ══════════════════════════════════════════════════════
 //  HIT TESTING
 // ══════════════════════════════════════════════════════
 
@@ -956,6 +1136,11 @@ function getHandle(cx, cy, W) {
   if (Math.hypot(cx - mX, cy - (AX_Y + 11)) < 13) return 'mean';
   if (Math.hypot(cx - sX, cy - (AX_Y + 11)) < 13) return 'sigma';
   if (DISTS[state.distId].peakHandle && Math.hypot(cx - mX, cy - (pY - 5)) < 13) return 'peak';
+  if (state.showCDF) {
+    const hY = AX_Y + 30;
+    if (Math.hypot(cx - toX(state.cdfA), cy - (hY - 3)) < 13) return 'cdfA';
+    if (Math.hypot(cx - toX(state.cdfB), cy - (hY - 3)) < 13) return 'cdfB';
+  }
   return null;
 }
 
@@ -1024,6 +1209,10 @@ function onMove(e) {
     } else if (drag.handle === 'peak') {
       const h = Math.max(8, AX_Y - cy);
       state.sigma = clamp(PLOT_H * 0.87 * SIGMA_REF / h, SIGMA_MIN, SIGMA_MAX);
+    } else if (drag.handle === 'cdfA') {
+      state.cdfA = clamp(sc.toV(cx), 0, 100);
+    } else if (drag.handle === 'cdfB') {
+      state.cdfB = clamp(sc.toV(cx), 0, 100);
     }
 
     document.getElementById('muVal').textContent  = state.mu.toFixed(1);
@@ -1229,8 +1418,30 @@ function setScaler(type) {
     const names = { standard: 'Standard', minmax: 'Min-Max', robust: 'Robust' };
     document.getElementById('canvasCardTitle').textContent = `${names[type]} Scaled Distribution`;
     document.getElementById('dragHint').style.display = 'none';
+    // CDF not available in scaled mode
+    if (state.showCDF) {
+      state.showCDF = false;
+      document.getElementById('showCDFBtn').classList.remove('active');
+    }
   }
   redraw(); updateTable(); updateDetail();
+}
+
+function toggleShowPDF() {
+  state.showPDF = !state.showPDF;
+  document.getElementById('showPDFBtn').classList.toggle('active', state.showPDF);
+  redraw();
+}
+
+function toggleShowCDF() {
+  if (state.scaler !== 'none') return;  // CDF only in grade-space mode
+  state.showCDF = !state.showCDF;
+  if (state.showCDF) {
+    state.cdfA = Math.max(0,   Math.round(state.mu - state.sigma));
+    state.cdfB = Math.min(100, Math.round(state.mu + state.sigma));
+  }
+  document.getElementById('showCDFBtn').classList.toggle('active', state.showCDF);
+  redraw();
 }
 
 function setDist(id) {
