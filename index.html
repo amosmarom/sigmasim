@@ -115,7 +115,7 @@
   <!-- Interactive canvas -->
   <div class="canvas-card">
     <div class="card-title" id="canvasCardTitle">Exam Grade Distribution — drag the handles to reshape</div>
-    <canvas id="distCanvas" height="360"></canvas>
+    <canvas id="distCanvas" height="480"></canvas>
   </div>
 
   <!-- Students + Detail -->
@@ -158,11 +158,11 @@
 //  CANVAS LAYOUT CONSTANTS
 // ══════════════════════════════════════════════════════
 
-const PLOT_TOP  = 14;
-const AX_Y      = 248;
-const PLOT_H    = AX_Y - PLOT_TOP;       // 234
-const PAD_L     = 54;
-const PAD_R     = 28;
+const PLOT_TOP  = 18;
+const AX_Y      = 340;
+const PLOT_H    = AX_Y - PLOT_TOP;       // 322
+const PAD_L     = 64;
+const PAD_R     = 36;
 const SIGMA_MIN = 4;
 const SIGMA_MAX = 28;
 const MU_MIN    = 12;
@@ -454,19 +454,20 @@ function drawScaledMode(ctx, W) {
   const ticks = state.scaler === 'minmax'
     ? [0, 0.25, 0.5, 0.75, 1]
     : [-3,-2,-1,0,1,2,3].filter(v => v >= lo - 0.01 && v <= hi + 0.01);
-  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#475569'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
   ticks.forEach(v => {
     const x = toX(v);
-    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, AX_Y); ctx.lineTo(x, AX_Y + 4); ctx.stroke();
-    ctx.fillText(state.scaler === 'minmax' ? v.toFixed(2) : v.toFixed(0), x, AX_Y + 14);
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, AX_Y); ctx.lineTo(x, AX_Y + 6); ctx.stroke();
+    ctx.fillText(state.scaler === 'minmax' ? v.toFixed(2) : v.toFixed(0), x, AX_Y + 18);
   });
   const axLabels = {
     standard: 'Standard Scaled  (x′ = (x − μ̂) / σ̂)',
     minmax:   'Min-Max Scaled  (x′ = (x − min) / (max − min))',
     robust:   'Robust Scaled  (x′ = (x − median) / IQR)',
   };
-  ctx.fillText(axLabels[state.scaler], (PAD_L + W - PAD_R) / 2, AX_Y + 26);
+  ctx.fillStyle = '#64748b'; ctx.font = 'bold 13px system-ui';
+  ctx.fillText(axLabels[state.scaler], (PAD_L + W - PAD_R) / 2, AX_Y + 34);
 
   // ── reference vertical lines ──
   const refs = state.scaler === 'minmax'
@@ -479,25 +480,25 @@ function drawScaledMode(ctx, W) {
     ctx.setLineDash(v === 0 ? [5,4] : [3,4]); ctx.globalAlpha = 0.55;
     ctx.beginPath(); ctx.moveTo(x, PLOT_TOP); ctx.lineTo(x, AX_Y); ctx.stroke();
     ctx.globalAlpha = 1; ctx.setLineDash([]);
-    if (lbl) { ctx.fillStyle = color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center'; ctx.fillText(lbl, x, PLOT_TOP + 10); }
+    if (lbl) { ctx.fillStyle = color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(lbl, x, PLOT_TOP + 14); }
   });
 
   // ── σ bracket annotations below axis ──
   const drawBkt = (a, b, label, color, row) => {
     if (b <= lo || a >= hi) return;
-    const y  = AX_Y + 38 + row * 22;
+    const y  = AX_Y + 48 + row * 28;
     const xa = toX(Math.max(lo, a)), xb = toX(Math.min(hi, b));
     if (xb <= xa) return;
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(xa, y-4); ctx.lineTo(xa, y); ctx.lineTo(xb, y); ctx.lineTo(xb, y-4);
+    ctx.moveTo(xa, y-5); ctx.lineTo(xa, y); ctx.lineTo(xb, y); ctx.lineTo(xb, y-5);
     ctx.stroke();
     [[xa,1],[xb,-1]].forEach(([x,d]) => {
-      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+d*5,y-3);
-      ctx.moveTo(x,y); ctx.lineTo(x+d*5,y+3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+d*6,y-4);
+      ctx.moveTo(x,y); ctx.lineTo(x+d*6,y+4); ctx.stroke();
     });
-    ctx.fillStyle = color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(label, (xa+xb)/2, y-7);
+    ctx.fillStyle = color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(label, (xa+xb)/2, y-8);
   };
 
   if (state.scaler !== 'minmax') {
@@ -544,13 +545,13 @@ function drawScaledMode(ctx, W) {
     const x  = toX(clamp(sv, lo, hi));
     const sel = state.selected === k;
     ctx.fillStyle = s.color;
-    ctx.strokeStyle = sel ? '#fff' : 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = sel ? 2.5 : 1.5;
-    ctx.beginPath(); ctx.arc(x, AX_Y - 1, sel ? 7 : 5, 0, Math.PI*2);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = sel ? 3 : 2;
+    ctx.beginPath(); ctx.arc(x, AX_Y - 1, sel ? 10 : 7, 0, Math.PI*2);
     ctx.fill(); ctx.stroke();
     if (sel) {
-      ctx.fillStyle = s.color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(s.name, x, AX_Y - 12);
+      ctx.fillStyle = s.color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(s.name, x, AX_Y - 16);
     }
   });
 
@@ -610,10 +611,10 @@ function fillRegion(ctx, sc, pdf, lo, hi, color) {
 
 function drawSigmaRegions(ctx, sc, pdf) {
   const { mu, sigma } = state;
-  fillRegion(ctx, sc, pdf, mu - 3 * sigma, mu + 3 * sigma, 'rgba(67,97,238,0.06)');
-  fillRegion(ctx, sc, pdf, mu - 2 * sigma, mu - sigma,     'rgba(67,97,238,0.11)');
-  fillRegion(ctx, sc, pdf, mu + sigma,     mu + 2 * sigma, 'rgba(67,97,238,0.11)');
-  fillRegion(ctx, sc, pdf, mu - sigma,     mu + sigma,     'rgba(67,97,238,0.22)');
+  fillRegion(ctx, sc, pdf, mu - 3 * sigma, mu + 3 * sigma, 'rgba(67,97,238,0.10)');
+  fillRegion(ctx, sc, pdf, mu - 2 * sigma, mu - sigma,     'rgba(67,97,238,0.18)');
+  fillRegion(ctx, sc, pdf, mu + sigma,     mu + 2 * sigma, 'rgba(67,97,238,0.18)');
+  fillRegion(ctx, sc, pdf, mu - sigma,     mu + sigma,     'rgba(67,97,238,0.32)');
 }
 
 // ── distribution curve ───────────────────────────────
@@ -631,7 +632,7 @@ function drawCurve(ctx, sc, pdf) {
   }
   ctx.lineTo(toX(100), AX_Y);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(67,97,238,0.08)';
+  ctx.fillStyle = 'rgba(67,97,238,0.14)';
   ctx.fill();
 
   ctx.beginPath();
@@ -640,8 +641,8 @@ function drawCurve(ctx, sc, pdf) {
     const y = toY(pdf(x, mu, sigma));
     i === 0 ? ctx.moveTo(toX(x), y) : ctx.lineTo(toX(x), y);
   }
-  ctx.strokeStyle = '#4361ee';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#3451d1';
+  ctx.lineWidth = 3.5;
   ctx.stroke();
 }
 
@@ -649,18 +650,18 @@ function drawCurve(ctx, sc, pdf) {
 
 function drawAxis(ctx, W, sc) {
   const { toX } = sc;
-  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(PAD_L, AX_Y); ctx.lineTo(W - PAD_R, AX_Y); ctx.stroke();
-  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#475569'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
   for (let v = 0; v <= 100; v += 10) {
     const x = toX(v);
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.beginPath(); ctx.moveTo(x, AX_Y); ctx.lineTo(x, AX_Y + 4); ctx.stroke();
-    ctx.fillText(v, x, AX_Y + 14);
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, AX_Y); ctx.lineTo(x, AX_Y + 6); ctx.stroke();
+    ctx.fillText(v, x, AX_Y + 18);
   }
-  ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui';
+  ctx.fillStyle = '#64748b'; ctx.font = 'bold 13px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText('Exam Grade', (PAD_L + W - PAD_R) / 2, AX_Y + 26);
+  ctx.fillText('Exam Grade', (PAD_L + W - PAD_R) / 2, AX_Y + 34);
 }
 
 // ── mean + sigma dashed lines ────────────────────────
@@ -668,22 +669,22 @@ function drawAxis(ctx, W, sc) {
 function drawMeanLine(ctx, sc) {
   const { toX } = sc;
   const x = toX(state.mu);
-  ctx.strokeStyle = '#4361ee'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = '#3451d1'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
   ctx.beginPath(); ctx.moveTo(x, PLOT_TOP); ctx.lineTo(x, AX_Y); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#4361ee'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText('μ', x, PLOT_TOP + 10);
+  ctx.fillStyle = '#3451d1'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('μ', x, PLOT_TOP + 14);
 }
 
 function drawSigmaLines(ctx, sc) {
   const { toX } = sc;
   const { mu, sigma } = state;
-  [[1,'#4361ee'],[2,'#3182ce']].forEach(([k, color]) => {
+  [[1,'#4361ee'],[2,'#2563eb'],[3,'#6d28d9']].forEach(([k, color]) => {
     [mu - k * sigma, mu + k * sigma].forEach(v => {
       const x = toX(clamp(v, 0, 100));
-      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath(); ctx.moveTo(x, PLOT_TOP + 20); ctx.lineTo(x, AX_Y); ctx.stroke();
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+      ctx.globalAlpha = 0.65;
+      ctx.beginPath(); ctx.moveTo(x, PLOT_TOP + 22); ctx.lineTo(x, AX_Y); ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.setLineDash([]);
     });
@@ -697,28 +698,28 @@ function drawSigmaAnnotations(ctx, W, sc) {
   const { mu, sigma } = state;
 
   const drawBracket = (lo, hi, label, color, row) => {
-    const y = AX_Y + 38 + row * 22;
+    const y = AX_Y + 48 + row * 28;
     const a = toX(clamp(lo, 0, 100));
     const b = toX(clamp(hi, 0, 100));
     const mid = (a + b) / 2;
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(a, y - 4); ctx.lineTo(a, y); ctx.lineTo(b, y); ctx.lineTo(b, y - 4);
+    ctx.moveTo(a, y - 5); ctx.lineTo(a, y); ctx.lineTo(b, y); ctx.lineTo(b, y - 5);
     ctx.stroke();
     [[a, 1], [b, -1]].forEach(([x, d]) => {
       ctx.beginPath();
-      ctx.moveTo(x, y); ctx.lineTo(x + d * 5, y - 3);
-      ctx.moveTo(x, y); ctx.lineTo(x + d * 5, y + 3);
+      ctx.moveTo(x, y); ctx.lineTo(x + d * 6, y - 4);
+      ctx.moveTo(x, y); ctx.lineTo(x + d * 6, y + 4);
       ctx.stroke();
     });
-    ctx.fillStyle = color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(label, mid, y - 7);
+    ctx.fillStyle = color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(label, mid, y - 8);
   };
 
   drawBracket(mu - sigma,     mu,             '−1σ', '#4361ee', 0);
   drawBracket(mu,             mu + sigma,     '+1σ', '#4361ee', 0);
-  drawBracket(mu - 2 * sigma, mu + 2 * sigma, '± 2σ  (95%)', '#3182ce', 1);
-  drawBracket(mu - 3 * sigma, mu + 3 * sigma, '± 3σ  (99.7%)', '#6b46c1', 2);
+  drawBracket(mu - 2 * sigma, mu + 2 * sigma, '± 2σ  (95%)', '#2563eb', 1);
+  drawBracket(mu - 3 * sigma, mu + 3 * sigma, '± 3σ  (99.7%)', '#6d28d9', 2);
 }
 
 // ── all data points strip ────────────────────────────
@@ -754,13 +755,13 @@ function drawStudentDots(ctx, sc) {
     const x = toX(g);
     const selected = state.selected === i;
     ctx.fillStyle = s.color;
-    ctx.strokeStyle = selected ? '#fff' : 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = selected ? 2.5 : 1.5;
-    ctx.beginPath(); ctx.arc(x, AX_Y - 1, selected ? 7 : 5, 0, Math.PI * 2);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = selected ? 3 : 2;
+    ctx.beginPath(); ctx.arc(x, AX_Y - 1, selected ? 10 : 7, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
     if (selected) {
-      ctx.fillStyle = s.color; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(s.name, x, AX_Y - 12);
+      ctx.fillStyle = s.color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(s.name, x, AX_Y - 16);
     }
   });
 }
@@ -775,28 +776,28 @@ function drawStudentAnnotation(ctx, sc, idx) {
   const gx = toX(g), mx = toX(state.mu);
   const curveY = toY(pdf(g, state.mu, state.sigma));
 
-  ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-  ctx.beginPath(); ctx.moveTo(gx, AX_Y - 9); ctx.lineTo(gx, Math.max(curveY, PLOT_TOP + 5)); ctx.stroke();
+  ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+  ctx.beginPath(); ctx.moveTo(gx, AX_Y - 12); ctx.lineTo(gx, Math.max(curveY, PLOT_TOP + 6)); ctx.stroke();
   ctx.setLineDash([]);
 
   if (Math.abs(gx - mx) > 4) {
-    const by = AX_Y - 28;
-    ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+    const by = AX_Y - 36;
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(mx, by); ctx.lineTo(gx, by); ctx.stroke();
     [mx, gx].forEach(bx => {
-      ctx.beginPath(); ctx.moveTo(bx, by - 5); ctx.lineTo(bx, by + 5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by + 6); ctx.stroke();
     });
     const z = s.z;
     const sign = z >= 0 ? '+' : '';
-    ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(`${sign}${z.toFixed(2)}σ`, (mx + gx) / 2, by - 7);
+    ctx.fillStyle = s.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(`${sign}${z.toFixed(2)}σ`, (mx + gx) / 2, by - 8);
     const diff = g - state.mu;
-    ctx.font = '9px system-ui';
-    ctx.fillText(`${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pts`, (mx + gx) / 2, by + 16);
+    ctx.font = '11px system-ui';
+    ctx.fillText(`${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pts`, (mx + gx) / 2, by + 18);
   }
 
-  ctx.fillStyle = s.color; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText(g.toFixed(1), gx, AX_Y + 14);
+  ctx.fillStyle = s.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(g.toFixed(1), gx, AX_Y + 18);
 }
 
 // ── interactive handles ──────────────────────────────
@@ -811,25 +812,25 @@ function drawHandles(ctx, sc) {
   const sX = toX(state.mu + state.sigma);
   const pY = peakY(sc);
 
-  ctx.fillStyle = '#4361ee'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.fillStyle = '#3451d1'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(mX,     AX_Y + 3);
-  ctx.lineTo(mX + 8, AX_Y + 11);
-  ctx.lineTo(mX,     AX_Y + 19);
-  ctx.lineTo(mX - 8, AX_Y + 11);
+  ctx.moveTo(mX,      AX_Y + 4);
+  ctx.lineTo(mX + 11, AX_Y + 15);
+  ctx.lineTo(mX,      AX_Y + 26);
+  ctx.lineTo(mX - 11, AX_Y + 15);
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
-  ctx.fillStyle = '#27ae60'; ctx.strokeStyle = '#fff';
-  ctx.beginPath(); ctx.arc(sX, AX_Y + 11, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText('σ', sX, AX_Y + 15);
+  ctx.fillStyle = '#16a34a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(sX, AX_Y + 15, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('σ', sX, AX_Y + 19);
 
   if (DISTS[state.distId].peakHandle) {
-    ctx.fillStyle = '#e74c3c'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.fillStyle = '#dc2626'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(mX,      pY - 11);
-    ctx.lineTo(mX + 8,  pY + 1);
-    ctx.lineTo(mX - 8,  pY + 1);
+    ctx.moveTo(mX,       pY - 14);
+    ctx.lineTo(mX + 11,  pY + 2);
+    ctx.lineTo(mX - 11,  pY + 2);
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }
 }
@@ -1133,13 +1134,13 @@ function getHandle(cx, cy, W) {
   const sc = makeScale(W);
   const { toX } = sc;
   const mX = toX(state.mu), sX = toX(state.mu + state.sigma), pY = peakY(sc);
-  if (Math.hypot(cx - mX, cy - (AX_Y + 11)) < 13) return 'mean';
-  if (Math.hypot(cx - sX, cy - (AX_Y + 11)) < 13) return 'sigma';
-  if (DISTS[state.distId].peakHandle && Math.hypot(cx - mX, cy - (pY - 5)) < 13) return 'peak';
+  if (Math.hypot(cx - mX, cy - (AX_Y + 15)) < 16) return 'mean';
+  if (Math.hypot(cx - sX, cy - (AX_Y + 15)) < 16) return 'sigma';
+  if (DISTS[state.distId].peakHandle && Math.hypot(cx - mX, cy - (pY - 6)) < 16) return 'peak';
   if (state.showCDF) {
     const hY = AX_Y + 30;
-    if (Math.hypot(cx - toX(state.cdfA), cy - (hY - 3)) < 13) return 'cdfA';
-    if (Math.hypot(cx - toX(state.cdfB), cy - (hY - 3)) < 13) return 'cdfB';
+    if (Math.hypot(cx - toX(state.cdfA), cy - (hY - 3)) < 16) return 'cdfA';
+    if (Math.hypot(cx - toX(state.cdfB), cy - (hY - 3)) < 16) return 'cdfB';
   }
   return null;
 }
