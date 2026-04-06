@@ -104,6 +104,13 @@
     <button class="toggle-btn" id="showPDFBtn"  onclick="toggleShowPDF()">Show PDF</button>
     <button class="toggle-btn" id="showCDFBtn"  onclick="toggleShowCDF()">Show CDF</button>
     <div class="sep"></div>
+    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">N students:</span>
+    <input type="range" id="nStudSlider" min="10" max="200" value="50" step="5"
+           style="width:90px;accent-color:var(--primary)"
+           oninput="document.getElementById('nStudVal').textContent=this.value">
+    <span id="nStudVal" style="font-weight:800;color:var(--primary);min-width:2rem;font-size:.82rem">50</span>
+    <button class="toggle-btn" id="simBtn" onclick="toggleSim()">▶ Simulate</button>
+    <div class="sep"></div>
     <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
     <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')">None</button>
     <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')">Standard</button>
@@ -240,6 +247,11 @@ const state = { mu: 72, sigma: 12, distId: 'normal', selected: null, showDots: f
 const N_POINTS = 200;
 let baseZScores = [];
 let baseJitter  = [];
+
+// ── simulation state ─────────────────────────────────
+let simTimer  = null;
+let simShown  = 0;
+let simData   = [];  // [{g, jitter}]
 
 function mulberry32(seed) {
   let s = seed;
@@ -524,11 +536,13 @@ function drawScaledMode(ctx, W) {
   // ── data points strip ──
   if (state.showDots) {
     ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
-    ctx.fillText(`${N_POINTS} sampled points`, toX(hi) - 2, AX_Y - 30);
-    grades.forEach((g, i) => {
+    const simPts2  = simData.length > 0 ? simData.slice(0, simShown) : grades.map((g, i) => ({ g, jitter: baseJitter[i] }));
+    const simCount2 = simData.length > 0 ? simShown : N_POINTS;
+    ctx.fillText(`${simCount2} student${simCount2 !== 1 ? 's' : ''}`, toX(hi) - 2, AX_Y - 30);
+    simPts2.forEach(({ g, jitter }) => {
       const sv = applyScaler(g, params, state.scaler);
       if (!isFinite(sv) || sv < lo || sv > hi) return;
-      const x = toX(sv), y = AX_Y - 22 + baseJitter[i] * 5;
+      const x = toX(sv), y = AX_Y - 22 + jitter * 5;
       const absV = state.scaler === 'minmax' ? Math.abs(sv - 0.5) * 4 : Math.abs(sv);
       ctx.fillStyle = absV < 1 ? 'rgba(39,174,96,0.45)'
                     : absV < 2 ? 'rgba(49,130,206,0.45)'
@@ -726,15 +740,18 @@ function drawSigmaAnnotations(ctx, W, sc) {
 
 function drawDataPoints(ctx, sc) {
   const { toX } = sc;
-  const grades = getAllGrades();
+  const useSim = simData.length > 0;
+  const pts    = useSim
+    ? simData.slice(0, simShown)
+    : getAllGrades().map((g, i) => ({ g, jitter: baseJitter[i] }));
+  const count  = useSim ? simShown : N_POINTS;
 
-  // label
   ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
-  ctx.fillText(`${N_POINTS} sampled points`, toX(100) - 2, AX_Y - 30);
+  ctx.fillText(`${count} student${count !== 1 ? 's' : ''}`, toX(100) - 2, AX_Y - 30);
 
-  grades.forEach((g, i) => {
+  pts.forEach(({ g, jitter }) => {
     const x = toX(g);
-    const y = AX_Y - 22 + baseJitter[i] * 5;
+    const y = AX_Y - 22 + jitter * 5;
     const z = (g - state.mu) / state.sigma;
     const absZ = Math.abs(z);
     const color = absZ < 1 ? 'rgba(39,174,96,0.45)'
@@ -1398,8 +1415,52 @@ function updateDetail() {
 // ══════════════════════════════════════════════════════
 
 function toggleShowDots() {
+  if (simData.length > 0) { stopSim(); return; }
   state.showDots = !state.showDots;
   document.getElementById('showDotsBtn').classList.toggle('active', state.showDots);
+  redraw();
+}
+
+// ── simulation ───────────────────────────────────────
+
+function toggleSim() {
+  if (simTimer) stopSim();
+  else startSim();
+}
+
+function startSim() {
+  if (simTimer) { clearInterval(simTimer); simTimer = null; }
+  const n = +document.getElementById('nStudSlider').value;
+  simShown = 0;
+  simData  = [];
+  const rng = mulberry32((Date.now() ^ 0xABCD) | 0);
+  for (let i = 0; i < n; i++) {
+    const z = sampleZ(state.distId, rng);
+    const g = clamp(state.mu + z * state.sigma, 0, 100);
+    simData.push({ g, jitter: (rng() - 0.5) * 2 });
+  }
+  state.showDots = true;
+  document.getElementById('showDotsBtn').classList.add('active');
+  document.getElementById('simBtn').textContent = '■ Stop';
+  document.getElementById('simBtn').classList.add('active');
+  const interval = Math.round(20000 / n);
+  simTimer = setInterval(() => {
+    simShown++;
+    redraw();
+    if (simShown >= n) {
+      clearInterval(simTimer); simTimer = null;
+      document.getElementById('simBtn').textContent = '▶ Simulate';
+      document.getElementById('simBtn').classList.remove('active');
+    }
+  }, interval);
+  redraw();
+}
+
+function stopSim() {
+  if (simTimer) { clearInterval(simTimer); simTimer = null; }
+  simShown = 0; simData = [];
+  document.getElementById('simBtn').textContent = '▶ Simulate';
+  document.getElementById('simBtn').classList.remove('active');
   redraw();
 }
 
@@ -1446,6 +1507,7 @@ function toggleShowCDF() {
 }
 
 function setDist(id) {
+  if (simTimer || simData.length > 0) stopSim();
   state.distId = id;
   document.querySelectorAll('.dist-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.dist === id);
