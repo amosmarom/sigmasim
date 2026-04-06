@@ -218,6 +218,8 @@
         <select class="col-select" id="xColSelect" onchange="setXCol(this.value)"></select>
         <span class="ctrl-label">Y column:</span>
         <select class="col-select" id="yColSelect" onchange="setYCol(this.value)"></select>
+        <div class="sep"></div>
+        <button class="toggle-btn" id="btnRemoveZeros" onclick="toggleOpt('removeZeros')">Remove Zeros</button>
       </span>
     </div>
   </div>
@@ -278,7 +280,7 @@ const state = {
   xDist: 'normal', yDist: 'normal',
   rho: 0.70, n: 50, seed: 12345,
   selected: null, hovered: null,
-  showReg: true, showRects: true, showMeans: true,
+  showReg: true, showRects: true, showMeans: true, removeZeros: false,
   mode: 'simulation',  // 'simulation' | 'dataset'
   dataset: null,       // { headers:[], rows:[{col:val}] }
   xCol: null, yCol: null,
@@ -369,6 +371,7 @@ function generateData() {
   if (state.mode === 'dataset' && state.dataset && state.xCol && state.yCol) {
     data = state.dataset.rows
       .filter(r => isFinite(r[state.xCol]) && isFinite(r[state.yCol]))
+      .filter(r => !state.removeZeros || (r[state.xCol] !== 0 && r[state.yCol] !== 0))
       .map(r => ({ x: r[state.xCol], y: r[state.yCol] }));
     return;
   }
@@ -840,8 +843,9 @@ function setN(val) {
 
 function toggleOpt(key) {
   state[key] = !state[key];
-  const btnMap = { showReg: 'btnReg', showRects: 'btnRects', showMeans: 'btnMeans' };
+  const btnMap = { showReg: 'btnReg', showRects: 'btnRects', showMeans: 'btnMeans', removeZeros: 'btnRemoveZeros' };
   document.getElementById(btnMap[key]).classList.toggle('active', state[key]);
+  if (key === 'removeZeros') { refresh(); return; }
   drawScatter();
 }
 
