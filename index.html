@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,11 +11,18 @@
       --text: #1a202c; --muted: #718096; --border: #e2e8f0;
     }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    html[dir="rtl"] body { font-family: 'Segoe UI', 'Arial', system-ui, sans-serif; }
 
-    header { background: linear-gradient(135deg,#4361ee,#7209b7); color:#fff; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
+    header { background: linear-gradient(135deg,#4361ee,#7209b7); color:#fff; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
     header h1 { font-size:1.5rem; font-weight:800; letter-spacing:-0.02em; }
     header .subtitle { font-size:.78rem; opacity:.85; margin-top:2px; }
+    .header-right { display:flex; flex-direction:column; align-items:flex-end; gap:.45rem; }
+    html[dir="rtl"] .header-right { align-items:flex-start; }
     header .tagline { font-size:.75rem; opacity:.8; text-align:right; max-width:260px; line-height:1.5; }
+    html[dir="rtl"] header .tagline { text-align:left; }
+    .header-version { font-size:.68rem; opacity:.65; margin-top:3px; letter-spacing:.01em; }
+    .lang-btn { padding:.32rem .75rem; background:rgba(255,255,255,.18); color:#fff; border:1.5px solid rgba(255,255,255,.45); border-radius:7px; font-size:.78rem; font-weight:700; cursor:pointer; transition:background .15s; white-space:nowrap; letter-spacing:.01em; }
+    .lang-btn:hover { background:rgba(255,255,255,.32); }
 
     .page { max-width:1280px; margin:0 auto; padding:1rem; display:flex; flex-direction:column; gap:1rem; }
 
@@ -72,7 +79,6 @@
     .verdict.above { background:#f0fff4; border-left:3px solid #27ae60; color:#276749; }
     .verdict.below { background:#fff5f5; border-left:3px solid #e53e3e; color:#742a2a; }
     .verdict.at    { background:#ebf8ff; border-left:3px solid #3182ce; color:#2c5282; }
-    .letter-grade { display:inline-block; font-size:1.4rem; font-weight:900; margin-right:.5rem; }
     .region-info { font-size:.75rem; color:var(--muted); margin-top:.4rem; }
   </style>
 </head>
@@ -81,21 +87,25 @@
 <header>
   <div>
     <h1>SigmaSim</h1>
-    <div class="subtitle">Standard Deviation Explorer</div>
+    <div class="subtitle" id="hdrSubtitle">Standard Deviation Explorer</div>
+    <div class="header-version">v1.1 &nbsp;·&nbsp; 2026-04-09</div>
   </div>
-  <div class="tagline">Drag the curve to reshape it — watch how student grades shift with μ and σ</div>
+  <div class="header-right">
+    <button class="lang-btn" id="langBtn" onclick="toggleLang()">עברית</button>
+    <div class="tagline" id="hdrTagline">Drag the curve to reshape it — watch how student grades shift with μ and σ</div>
+  </div>
 </header>
 
 <div class="page">
 
   <!-- Distribution picker + controls -->
   <div class="top-bar">
-    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Distribution:</span>
-    <button class="dist-btn active" data-dist="normal"   onclick="setDist('normal')">Normal</button>
-    <button class="dist-btn"        data-dist="rskew"    onclick="setDist('rskew')">Right-Skewed</button>
-    <button class="dist-btn"        data-dist="lskew"    onclick="setDist('lskew')">Left-Skewed</button>
-    <button class="dist-btn"        data-dist="uniform"  onclick="setDist('uniform')">Uniform</button>
-    <button class="dist-btn"        data-dist="bimodal"  onclick="setDist('bimodal')">Bimodal</button>
+    <span id="distLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">Distribution:</span>
+    <button class="dist-btn active" data-dist="normal"   onclick="setDist('normal')"  id="dBtn_normal">Normal</button>
+    <button class="dist-btn"        data-dist="rskew"    onclick="setDist('rskew')"   id="dBtn_rskew">Right-Skewed</button>
+    <button class="dist-btn"        data-dist="lskew"    onclick="setDist('lskew')"   id="dBtn_lskew">Left-Skewed</button>
+    <button class="dist-btn"        data-dist="uniform"  onclick="setDist('uniform')" id="dBtn_uniform">Uniform</button>
+    <button class="dist-btn"        data-dist="bimodal"  onclick="setDist('bimodal')" id="dBtn_bimodal">Bimodal</button>
     <div class="sep"></div>
     <div class="stat-pill"><label>μ (mean)</label><span class="val" id="muVal">72.0</span></div>
     <div class="stat-pill"><label>σ (std dev)</label><span class="val" id="sigVal">12.0</span></div>
@@ -104,18 +114,18 @@
     <button class="toggle-btn" id="showPDFBtn"  onclick="toggleShowPDF()">Show PDF</button>
     <button class="toggle-btn" id="showCDFBtn"  onclick="toggleShowCDF()">Show CDF</button>
     <div class="sep"></div>
-    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">N students:</span>
+    <span id="nStudLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">N students:</span>
     <input type="range" id="nStudSlider" min="10" max="200" value="50" step="5"
            style="width:90px;accent-color:var(--primary)"
            oninput="document.getElementById('nStudVal').textContent=this.value">
     <span id="nStudVal" style="font-weight:800;color:var(--primary);min-width:2rem;font-size:.82rem">50</span>
     <button class="toggle-btn" id="simBtn" onclick="toggleSim()">▶ Simulate</button>
     <div class="sep"></div>
-    <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
-    <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')">None</button>
-    <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')">Standard</button>
-    <button class="scaler-btn"        data-scaler="minmax"   onclick="setScaler('minmax')">Min-Max</button>
-    <button class="scaler-btn"        data-scaler="robust"   onclick="setScaler('robust')">Robust</button>
+    <span id="scalerLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
+    <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')"     id="sBtnNone">None</button>
+    <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')" id="sBtnStd">Standard</button>
+    <button class="scaler-btn"        data-scaler="minmax"   onclick="setScaler('minmax')"   id="sBtnMinMax">Min-Max</button>
+    <button class="scaler-btn"        data-scaler="robust"   onclick="setScaler('robust')"   id="sBtnRobust">Robust</button>
     <div class="hint" id="dragHint">◆ drag mean &nbsp;●  drag σ handle &nbsp;▲ drag peak height (Normal only)</div>
   </div>
 
@@ -129,7 +139,7 @@
   <div class="bottom-grid">
 
     <div class="table-card">
-      <div class="card-title">Sample Students</div>
+      <div class="card-title" id="sampleStudentsTitle">Sample Students</div>
       <table class="student-table">
         <thead>
           <tr id="tableHead">
@@ -144,7 +154,7 @@
     </div>
 
     <div class="detail-card">
-      <div class="card-title">Standard Deviation Calculation</div>
+      <div class="card-title" id="sdCalcTitle">Standard Deviation Calculation</div>
       <div id="detailPanel">
         <div class="detail-empty">Click a student in the table or on the graph to see the step-by-step calculation.</div>
       </div>
@@ -161,6 +171,126 @@
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════
+//  TRANSLATIONS
+// ══════════════════════════════════════════════════════
+
+const T = {
+  en: {
+    langToggle:          'עברית',
+    subtitle:            'Standard Deviation Explorer',
+    tagline:             'Drag the curve to reshape it — watch how student grades shift with μ and σ',
+    distLabel:           'Distribution:',
+    distNormal:          'Normal',       distRskew:  'Right-Skewed',
+    distLskew:           'Left-Skewed',  distUniform:'Uniform',  distBimodal:'Bimodal',
+    showDots:            'Show All Points',
+    showPDF:             'Show PDF',     showCDF:    'Show CDF',
+    nStudents:           'N students:',
+    simulate:            '▶ Simulate',   simStop:    '■ Stop',
+    scalerLabel:         'Scaler:',
+    scalerNone:          'None',         scalerStd:  'Standard',
+    scalerMinMax:        'Min-Max',      scalerRobust:'Robust',
+    dragHintFull:        '◆ drag mean \u00a0●  drag σ handle \u00a0▲ drag peak height (Normal only)',
+    dragHintBasic:       '◆ drag mean \u00a0●  drag σ handle',
+    canvasTitleNormal:   'Exam Grade Distribution — drag the handles to reshape',
+    canvasTitleStd:      'Standard Scaled Distribution',
+    canvasTitleMinMax:   'Min-Max Scaled Distribution',
+    canvasTitleRobust:   'Robust Scaled Distribution',
+    scalerCardTitleStd:  'Standard Scaler — x′ = (x − μ̂) / σ̂  →  zero mean, unit variance',
+    scalerCardTitleMinMax:'Min-Max Scaler — x′ = (x − min) / (max − min)  →  [0, 1]',
+    scalerCardTitleRobust:'Robust Scaler — x′ = (x − median) / IQR  →  outlier-resistant',
+    sampleStudents:      'Sample Students',
+    colStudent:          'Student',  colGrade:'Grade',  colStdRange:'Std Range',  colZscore:'z-score',
+    scalerColStd:        'Std Scaled',  scalerColMinMax:'Min-Max',  scalerColRobust:'Robust',
+    sdTitle:             'Standard Deviation Calculation',
+    detailEmpty:         'Click a student in the table or on the graph to see the step-by-step calculation.',
+    examGrade:           'Exam grade:',
+    step1:               'Step 1 — Distance from the mean',
+    step2:               'Step 2 — Convert to standard deviation units',
+    step3:               'Step 3 — Interpret the z-score',
+    step4Std:            'Step 4 — Standard Scaler',
+    step4MinMax:         'Step 4 — Min-Max Scaler',
+    step4Robust:         'Step 4 — Robust Scaler',
+    theNumbers:          'The numbers',
+    points:              'points',
+    stdDevs:             n => `${n} standard deviation${n !== 1 ? 's' : ''}`,
+    ABOVE:               'ABOVE',  BELOW:'BELOW',  AT:'AT',
+    regionLabel:         'Region:',
+    regionFallsIn:       (pct, ceil) => `about <strong>${pct}</strong> of students fall within ±${ceil}σ of the mean.`,
+    region1:             'Within ±1σ',  region2:'Within ±2σ',
+    region3:             'Within ±3σ',  regionBeyond:'Beyond ±3σ',
+    axisGrade:           'Exam Grade',
+    scalerHint:          'Set Scaler to None to adjust μ / σ',
+    studentCount:        n => `${n} student${n !== 1 ? 's' : ''}`,
+    axisDescStd:         'Scaled output — 0 = data mean, ±1 = ±1 std dev',
+    axisDescMinMax:      'Scaled output — 0 = minimum grade, 1 = maximum grade',
+    axisDescRobust:      'Scaled output — 0 = median, ±1 = ±1 IQR',
+    cdfDragHint:         '← drag ▲ handles to set a and b',
+    axScaledStd:         'Standard Scaled  (x′ = (x − μ̂) / σ̂)',
+    axScaledMinMax:      'Min-Max Scaled  (x′ = (x − min) / (max − min))',
+    axScaledRobust:      'Robust Scaled  (x′ = (x − median) / IQR)',
+    normRangeLabel:      'normalized range [0, 1]',
+  },
+  he: {
+    langToggle:          'English',
+    subtitle:            'סייעת סטיות תקן',
+    tagline:             'גרור את העקומה לעיצוב מחדש — צפה כיצד ציוני התלמידים משתנים עם μ ו-σ',
+    distLabel:           ':התפלגות',
+    distNormal:          'נורמלי',     distRskew:  'מוטה ימינה',
+    distLskew:           'מוטה שמאלה', distUniform:'אחיד',  distBimodal:'דו-שיאי',
+    showDots:            'הצג את כל הנקודות',
+    showPDF:             'הצג PDF',    showCDF:    'הצג CDF',
+    nStudents:           ':N תלמידים',
+    simulate:            '▶ סימולציה', simStop:    '■ עצור',
+    scalerLabel:         ':סקיילר',
+    scalerNone:          'ללא',        scalerStd:  'סטנדרטי',
+    scalerMinMax:        'מינ-מקס',    scalerRobust:'רובסטי',
+    dragHintFull:        'גרור גובה שיא ▲  גרור ידית σ ●  גרור ממוצע ◆',
+    dragHintBasic:       'גרור ידית σ ●  גרור ממוצע ◆',
+    canvasTitleNormal:   'התפלגות ציוני הבחינה — גרור את הידיות לעיצוב מחדש',
+    canvasTitleStd:      'התפלגות בקנה מידה סטנדרטי',
+    canvasTitleMinMax:   'התפלגות בקנה מידה מינ-מקס',
+    canvasTitleRobust:   'התפלגות בקנה מידה רובסטי',
+    scalerCardTitleStd:  'סקיילר סטנדרטי — x′ = (x − μ̂) / σ̂  →  ממוצע אפס, שונות יחידה',
+    scalerCardTitleMinMax:'סקיילר מינ-מקס — x′ = (x − min) / (max − min)  →  [0, 1]',
+    scalerCardTitleRobust:'סקיילר רובסטי — x′ = (x − חציון) / IQR  →  עמיד בפני ערכים חריגים',
+    sampleStudents:      'תלמידים לדוגמה',
+    colStudent:          'תלמיד',    colGrade:'ציון',  colStdRange:'טווח תקני',  colZscore:'ציון-z',
+    scalerColStd:        'סקייל סטנדרטי',  scalerColMinMax:'מינ-מקס',  scalerColRobust:'רובסטי',
+    sdTitle:             'חישוב סטיית תקן',
+    detailEmpty:         'לחץ על תלמיד בטבלה או על הגרף לצפייה בחישוב שלב אחר שלב.',
+    examGrade:           ':ציון בחינה',
+    step1:               'שלב 1 — מרחק מהממוצע',
+    step2:               'שלב 2 — המרה ליחידות סטיית תקן',
+    step3:               'שלב 3 — פירוש ציון ה-z',
+    step4Std:            'שלב 4 — סקיילר סטנדרטי',
+    step4MinMax:         'שלב 4 — סקיילר מינ-מקס',
+    step4Robust:         'שלב 4 — סקיילר רובסטי',
+    theNumbers:          'המספרים',
+    points:              'נקודות',
+    stdDevs:             n => `${n} סטיות תקן`,
+    ABOVE:               'מעל',  BELOW:'מתחת ל',  AT:'ב',
+    regionLabel:         ':אזור',
+    regionFallsIn:       (pct, ceil) => `כ-<strong>${pct}</strong> מהתלמידים נמצאים בתוך ±${ceil}σ מהממוצע.`,
+    region1:             'בתוך ±1σ',   region2:'בתוך ±2σ',
+    region3:             'בתוך ±3σ',   regionBeyond:'מעבר ל-±3σ',
+    axisGrade:           'ציון בחינה',
+    scalerHint:          'הגדר סקיילר ל-None לשינוי μ / σ',
+    studentCount:        n => `${n} תלמידים`,
+    axisDescStd:         'ערך מסקייל — 0 = ממוצע נתונים, ±1 = ±1 סטיית תקן',
+    axisDescMinMax:      'ערך מסקייל — 0 = ציון מינימלי, 1 = ציון מקסימלי',
+    axisDescRobust:      'ערך מסקייל — 0 = חציון, ±1 = ±1 IQR',
+    cdfDragHint:         'גרור ▲ ידיות לקביעת a ו-b',
+    axScaledStd:         'ערך סטנדרטי  (x′ = (x − μ̂) / σ̂)',
+    axScaledMinMax:      'ערך מינ-מקס  (x′ = (x − min) / (max − min))',
+    axScaledRobust:      'ערך רובסטי  (x′ = (x − חציון) / IQR)',
+    normRangeLabel:      'טווח מנורמל [0, 1]',
+  }
+};
+
+let lang = 'en';
+function tx() { return T[lang]; }
+
 // ══════════════════════════════════════════════════════
 //  CANVAS LAYOUT CONSTANTS
 // ══════════════════════════════════════════════════════
@@ -219,13 +349,13 @@ const DISTS = {
 // ══════════════════════════════════════════════════════
 
 const STUDENTS = [
-  { name: 'Alice',  z: -2.0, color: '#e53e3e' },
-  { name: 'Bob',    z: -1.2, color: '#dd6b20' },
-  { name: 'Carol',  z: -0.4, color: '#d69e2e' },
-  { name: 'Dave',   z: +0.3, color: '#38a169' },
-  { name: 'Eve',    z: +1.0, color: '#3182ce' },
-  { name: 'Frank',  z: +1.7, color: '#6b46c1' },
-  { name: 'Grace',  z: +2.5, color: '#b83280' },
+  { name: 'Maya',  z: -2.0, color: '#e53e3e' },
+  { name: 'Omer',  z: -1.2, color: '#dd6b20' },
+  { name: 'Noa',   z: -0.4, color: '#d69e2e' },
+  { name: 'Lior',  z: +0.3, color: '#38a169' },
+  { name: 'Tal',   z: +1.0, color: '#3182ce' },
+  { name: 'Yael',  z: +1.7, color: '#6b46c1' },
+  { name: 'Dana',  z: +2.5, color: '#b83280' },
 ];
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -321,11 +451,6 @@ function applyScaler(x, params, type) {
   return x;
 }
 
-const SCALER_TITLES = {
-  standard: "Standard Scaler — x′ = (x − μ̂) / σ̂  →  zero mean, unit variance",
-  minmax:   "Min-Max Scaler — x′ = (x − min) / (max − min)  →  [0, 1]",
-  robust:   "Robust Scaler — x′ = (x − median) / IQR  →  outlier-resistant",
-};
 
 // ══════════════════════════════════════════════════════
 //  SCALE HELPERS
@@ -474,9 +599,9 @@ function drawScaledMode(ctx, W) {
     ctx.fillText(state.scaler === 'minmax' ? v.toFixed(2) : v.toFixed(0), x, AX_Y + 18);
   });
   const axLabels = {
-    standard: 'Standard Scaled  (x′ = (x − μ̂) / σ̂)',
-    minmax:   'Min-Max Scaled  (x′ = (x − min) / (max − min))',
-    robust:   'Robust Scaled  (x′ = (x − median) / IQR)',
+    standard: tx().axScaledStd,
+    minmax:   tx().axScaledMinMax,
+    robust:   tx().axScaledRobust,
   };
   ctx.fillStyle = '#64748b'; ctx.font = 'bold 13px system-ui';
   ctx.fillText(axLabels[state.scaler], (PAD_L + W - PAD_R) / 2, AX_Y + 34);
@@ -520,7 +645,7 @@ function drawScaledMode(ctx, W) {
     drawBkt(-2, 2,  `± 2${u}  (95%)`,  '#3182ce', 1);
     drawBkt(-3, 3,  `± 3${u}  (99.7%)`,'#6b46c1', 2);
   } else {
-    drawBkt(0, 1, 'normalized range [0, 1]', '#4361ee', 0);
+    drawBkt(0, 1, tx().normRangeLabel, '#4361ee', 0);
     // Show parametric mean position
     const smu = applyScaler(state.mu, params, 'minmax');
     if (smu >= lo && smu <= hi) {
@@ -538,7 +663,7 @@ function drawScaledMode(ctx, W) {
     ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
     const simPts2  = simData.length > 0 ? simData.slice(0, simShown) : grades.map((g, i) => ({ g, jitter: baseJitter[i] }));
     const simCount2 = simData.length > 0 ? simShown : N_POINTS;
-    ctx.fillText(`${simCount2} student${simCount2 !== 1 ? 's' : ''}`, toX(hi) - 2, AX_Y - 30);
+    ctx.fillText(tx().studentCount(simCount2), toX(hi) - 2, AX_Y - 30);
     simPts2.forEach(({ g, jitter }) => {
       const sv = applyScaler(g, params, state.scaler);
       if (!isFinite(sv) || sv < lo || sv > hi) return;
@@ -601,7 +726,7 @@ function drawScaledMode(ctx, W) {
 
   // ── hint: handles disabled in scaled mode ──
   ctx.fillStyle = '#a0aec0'; ctx.font = 'italic 9px system-ui'; ctx.textAlign = 'right';
-  ctx.fillText('Set Scaler to None to adjust μ / σ', W - PAD_R, PLOT_TOP + 10);
+  ctx.fillText(tx().scalerHint, W - PAD_R, PLOT_TOP + 10);
 }
 
 // ── σ coloured region fills ──────────────────────────
@@ -675,7 +800,7 @@ function drawAxis(ctx, W, sc) {
   }
   ctx.fillStyle = '#64748b'; ctx.font = 'bold 13px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText('Exam Grade', (PAD_L + W - PAD_R) / 2, AX_Y + 34);
+  ctx.fillText(tx().axisGrade, (PAD_L + W - PAD_R) / 2, AX_Y + 34);
 }
 
 // ── mean + sigma dashed lines ────────────────────────
@@ -747,7 +872,7 @@ function drawDataPoints(ctx, sc) {
   const count  = useSim ? simShown : N_POINTS;
 
   ctx.fillStyle = '#a0aec0'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
-  ctx.fillText(`${count} student${count !== 1 ? 's' : ''}`, toX(100) - 2, AX_Y - 30);
+  ctx.fillText(tx().studentCount(count), toX(100) - 2, AX_Y - 30);
 
   pts.forEach(({ g, jitter }) => {
     const x = toX(g);
@@ -950,9 +1075,9 @@ function drawScalerCanvas() {
 
   // Axis description
   const axDesc = {
-    standard: 'Scaled output — 0 = data mean, ±1 = ±1 std dev',
-    minmax:   'Scaled output — 0 = minimum grade, 1 = maximum grade',
-    robust:   'Scaled output — 0 = median, ±1 = ±1 IQR',
+    standard: tx().axisDescStd,
+    minmax:   tx().axisDescMinMax,
+    robust:   tx().axisDescRobust,
   };
   ctx.fillStyle = '#a0aec0'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
   ctx.fillText(axDesc[state.scaler], W / 2, AY + 28);
@@ -1140,7 +1265,7 @@ function drawCDFOverlay(ctx, W, sc) {
   ctx.fillText(`a = ${state.cdfA.toFixed(1)}   CDF(a) = ${(cdfA2*100).toFixed(1)}%`, bx+7, by+31);
   ctx.fillText(`b = ${state.cdfB.toFixed(1)}   CDF(b) = ${(cdfB2*100).toFixed(1)}%`, bx+7, by+44);
   ctx.fillStyle = '#4361ee'; ctx.font = '8.5px system-ui';
-  ctx.fillText(`← drag ▲ handles to set a and b`, bx+7, by+60);
+  ctx.fillText(tx().cdfDragHint, bx+7, by+60);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1267,25 +1392,24 @@ canvas.addEventListener('touchend',   onUp);
 // ══════════════════════════════════════════════════════
 
 function regionInfo(absZ) {
-  if (absZ < 1)  return { label: 'Within ±1σ',  pct: '68%',   bg: '#c6f6d5', color: '#276749' };
-  if (absZ < 2)  return { label: 'Within ±2σ',  pct: '95%',   bg: '#bee3f8', color: '#2c5282' };
-  if (absZ < 3)  return { label: 'Within ±3σ',  pct: '99.7%', bg: '#e9d8fd', color: '#553c9a' };
-  return             { label: 'Beyond ±3σ',      pct: '<0.3%', bg: '#fed7d7', color: '#742a2a' };
+  const t = tx();
+  if (absZ < 1)  return { label: t.region1,      pct: '68%',   bg: '#c6f6d5', color: '#276749' };
+  if (absZ < 2)  return { label: t.region2,       pct: '95%',   bg: '#bee3f8', color: '#2c5282' };
+  if (absZ < 3)  return { label: t.region3,       pct: '99.7%', bg: '#e9d8fd', color: '#553c9a' };
+  return             { label: t.regionBeyond,      pct: '<0.3%', bg: '#fed7d7', color: '#742a2a' };
 }
 
-function letterGrade(g) {
-  return g >= 90 ? 'A' : g >= 80 ? 'B' : g >= 70 ? 'C' : g >= 60 ? 'D' : 'F';
-}
 
 function updateTable() {
   const grades = getAllGrades();
   const params = state.scaler !== 'none' ? getScalerParams(grades) : null;
-  const scalerColNames = { standard: 'Std Scaled', minmax: 'Min-Max', robust: 'Robust' };
+  const t = tx();
+  const scalerColNames = { standard: t.scalerColStd, minmax: t.scalerColMinMax, robust: t.scalerColRobust };
 
   // Rebuild header
   const thead = document.getElementById('tableHead');
   thead.innerHTML = `
-    <th>Student</th><th>Grade</th><th>z-score</th><th>Region</th>
+    <th>${t.colStudent}</th><th>${t.colGrade}</th><th>${t.colStdRange}</th><th>${t.colZscore}</th>
     ${params ? `<th>${scalerColNames[state.scaler]}</th>` : ''}
   `;
 
@@ -1307,9 +1431,9 @@ function updateTable() {
     return `
       <tr class="${sel}" onclick="selectStudent(${i})">
         <td><span class="dot" style="background:${s.color}"></span>${s.name}</td>
-        <td><span class="grade-val">${g.toFixed(1)}</span> <small style="color:var(--muted)">${letterGrade(g)}</small></td>
-        <td><span class="z-val" style="color:${s.color}">${sign}${z.toFixed(2)}σ</span></td>
+        <td><span class="grade-val">${g.toFixed(1)}</span></td>
         <td><span class="region-badge" style="background:${ri.bg};color:${ri.color}">${ri.label}</span></td>
+        <td><span class="z-val" style="color:${s.color}">${sign}${z.toFixed(2)}σ</span></td>
         ${scaledCell}
       </tr>`;
   }).join('');
@@ -1326,8 +1450,9 @@ function selectStudent(i) {
 
 function updateDetail() {
   const el = document.getElementById('detailPanel');
+  const t = tx();
   if (state.selected === null) {
-    el.innerHTML = `<div class="detail-empty">Click a student in the table or on the graph to see the step-by-step calculation.</div>`;
+    el.innerHTML = `<div class="detail-empty">${t.detailEmpty}</div>`;
     return;
   }
 
@@ -1339,9 +1464,7 @@ function updateDetail() {
   const sign = diff >= 0 ? '+' : '';
   const zSign = z >= 0 ? '+' : '';
   const ri = regionInfo(Math.abs(z));
-  const letter = letterGrade(g);
-  const letterColors = { A:'#276749', B:'#2c5282', C:'#744210', D:'#744210', F:'#742a2a' };
-  const direction = z > 0.05 ? 'ABOVE' : z < -0.05 ? 'BELOW' : 'AT';
+  const direction = z > 0.05 ? t.ABOVE : z < -0.05 ? t.BELOW : t.AT;
   const verdictClass = z > 0.05 ? 'above' : z < -0.05 ? 'below' : 'at';
   const absZ = Math.abs(z);
 
@@ -1351,7 +1474,7 @@ function updateDetail() {
     const params = getScalerParams(grades);
     const sv = applyScaler(g, params, state.scaler);
     const svSign = sv >= 0 ? '+' : '';
-    const scalerTitles = { standard: 'Standard Scaler', minmax: 'Min-Max Scaler', robust: 'Robust Scaler' };
+    const scalerTitles = { standard: t.step4Std, minmax: t.step4MinMax, robust: t.step4Robust };
     let formula;
     if (state.scaler === 'standard') {
       formula = `x′ = (x − μ̂) / σ̂ = (${g.toFixed(1)} − ${params.mean.toFixed(1)}) / ${params.std.toFixed(1)} = <span class="highlight" style="color:${s.color}">${svSign}${sv.toFixed(3)}</span>`;
@@ -1369,18 +1492,18 @@ function updateDetail() {
 
   el.innerHTML = `
     <div class="detail-name" style="color:${s.color}">${s.name}</div>
-    <div class="detail-grade">Exam grade: <strong>${g.toFixed(1)}</strong> &nbsp;·&nbsp; Letter: <strong style="color:${letterColors[letter]}">${letter}</strong></div>
+    <div class="detail-grade">${t.examGrade} <strong>${g.toFixed(1)}</strong></div>
 
     <div class="calc-step">
-      <div class="calc-step-label">Step 1 — Distance from the mean</div>
+      <div class="calc-step-label">${t.step1}</div>
       <div class="calc-formula">
         x − μ &nbsp;=&nbsp; ${g.toFixed(1)} − ${mu.toFixed(1)} &nbsp;=&nbsp;
-        <span class="highlight" style="color:${s.color}">${sign}${diff.toFixed(1)} points</span>
+        <span class="highlight" style="color:${s.color}">${sign}${diff.toFixed(1)} ${t.points}</span>
       </div>
     </div>
 
     <div class="calc-step">
-      <div class="calc-step-label">Step 2 — Convert to standard deviation units</div>
+      <div class="calc-step-label">${t.step2}</div>
       <div class="calc-formula">
         z &nbsp;=&nbsp; (x − μ) ÷ σ &nbsp;=&nbsp; ${sign}${diff.toFixed(1)} ÷ ${sigma.toFixed(1)} &nbsp;=&nbsp;
         <span class="highlight" style="color:${s.color}">${zSign}${z.toFixed(3)}</span>
@@ -1388,19 +1511,18 @@ function updateDetail() {
     </div>
 
     <div class="calc-step">
-      <div class="calc-step-label">Step 3 — Interpret the z-score</div>
+      <div class="calc-step-label">${t.step3}</div>
       <div class="verdict ${verdictClass}">
-        <span class="letter-grade" style="color:${letterColors[letter]}">${letter}</span>
-        <strong>${s.name}</strong> is <strong>${absZ.toFixed(2)} standard deviation${absZ !== 1 ? 's' : ''}</strong>
+        <strong>${s.name}</strong> is <strong>${t.stdDevs(absZ.toFixed(2))}</strong>
         ${direction} the class average.<br>
         <span class="region-info">
-          Region: <strong>${ri.label}</strong> — about <strong>${ri.pct}</strong> of students fall within ±${Math.ceil(Math.abs(z))}σ of the mean.
+          ${t.regionLabel} <strong>${ri.label}</strong> — ${t.regionFallsIn(ri.pct, Math.ceil(Math.abs(z)))}
         </span>
       </div>
     </div>
 
     <div class="calc-step">
-      <div class="calc-step-label">The numbers</div>
+      <div class="calc-step-label">${t.theNumbers}</div>
       <div class="calc-formula">
         Mean (μ) = ${mu.toFixed(1)} &nbsp;·&nbsp;
         Std Dev (σ) = ${sigma.toFixed(1)}<br>
@@ -1441,7 +1563,7 @@ function startSim() {
   }
   state.showDots = true;
   document.getElementById('showDotsBtn').classList.add('active');
-  document.getElementById('simBtn').textContent = '■ Stop';
+  document.getElementById('simBtn').textContent = tx().simStop;
   document.getElementById('simBtn').classList.add('active');
   const interval = Math.round(20000 / n);
   simTimer = setInterval(() => {
@@ -1449,7 +1571,7 @@ function startSim() {
     redraw();
     if (simShown >= n) {
       clearInterval(simTimer); simTimer = null;
-      document.getElementById('simBtn').textContent = '▶ Simulate';
+      document.getElementById('simBtn').textContent = tx().simulate;
       document.getElementById('simBtn').classList.remove('active');
     }
   }, interval);
@@ -1459,7 +1581,7 @@ function startSim() {
 function stopSim() {
   if (simTimer) { clearInterval(simTimer); simTimer = null; }
   simShown = 0; simData = [];
-  document.getElementById('simBtn').textContent = '▶ Simulate';
+  document.getElementById('simBtn').textContent = tx().simulate;
   document.getElementById('simBtn').classList.remove('active');
   redraw();
 }
@@ -1470,15 +1592,17 @@ function setScaler(type) {
     b.classList.toggle('active', b.dataset.scaler === type);
   });
   const card = document.getElementById('scalerCard');
+  const t = tx();
   if (type === 'none') {
     card.style.display = 'none';
-    document.getElementById('canvasCardTitle').textContent = 'Exam Grade Distribution — drag the handles to reshape';
+    document.getElementById('canvasCardTitle').textContent = t.canvasTitleNormal;
     document.getElementById('dragHint').style.display = '';
   } else {
     card.style.display = 'block';
-    document.getElementById('scalerCardTitle').textContent = SCALER_TITLES[type];
-    const names = { standard: 'Standard', minmax: 'Min-Max', robust: 'Robust' };
-    document.getElementById('canvasCardTitle').textContent = `${names[type]} Scaled Distribution`;
+    const scalerTitles = { standard: t.scalerCardTitleStd, minmax: t.scalerCardTitleMinMax, robust: t.scalerCardTitleRobust };
+    document.getElementById('scalerCardTitle').textContent = scalerTitles[type];
+    const names = { standard: t.canvasTitleStd, minmax: t.canvasTitleMinMax, robust: t.canvasTitleRobust };
+    document.getElementById('canvasCardTitle').textContent = names[type];
     document.getElementById('dragHint').style.display = 'none';
     // CDF not available in scaled mode
     if (state.showCDF) {
@@ -1513,11 +1637,63 @@ function setDist(id) {
     b.classList.toggle('active', b.dataset.dist === id);
   });
   const hasPeak = DISTS[id].peakHandle;
-  document.getElementById('dragHint').textContent =
-    hasPeak ? '◆ drag mean  ● drag σ handle  ▲ drag peak height'
-            : '◆ drag mean  ● drag σ handle';
+  const t = tx();
+  document.getElementById('dragHint').textContent = hasPeak ? t.dragHintFull : t.dragHintBasic;
   generateBaseData();
   redraw(); updateTable(); updateDetail();
+}
+
+// ══════════════════════════════════════════════════════
+//  LANGUAGE TOGGLE
+// ══════════════════════════════════════════════════════
+
+function applyLang() {
+  const t = tx();
+  const isHe = lang === 'he';
+  document.documentElement.lang = lang;
+  document.documentElement.dir  = isHe ? 'rtl' : 'ltr';
+
+  document.getElementById('langBtn').textContent       = t.langToggle;
+  document.getElementById('hdrSubtitle').textContent   = t.subtitle;
+  document.getElementById('hdrTagline').textContent    = t.tagline;
+  document.getElementById('distLabel').textContent     = t.distLabel;
+  document.getElementById('dBtn_normal').textContent   = t.distNormal;
+  document.getElementById('dBtn_rskew').textContent    = t.distRskew;
+  document.getElementById('dBtn_lskew').textContent    = t.distLskew;
+  document.getElementById('dBtn_uniform').textContent  = t.distUniform;
+  document.getElementById('dBtn_bimodal').textContent  = t.distBimodal;
+  document.getElementById('showDotsBtn').textContent   = t.showDots;
+  document.getElementById('showPDFBtn').textContent    = t.showPDF;
+  document.getElementById('showCDFBtn').textContent    = t.showCDF;
+  document.getElementById('nStudLabel').textContent    = t.nStudents;
+  document.getElementById('simBtn').textContent        = simTimer ? t.simStop : t.simulate;
+  document.getElementById('scalerLabel').textContent   = t.scalerLabel;
+  document.getElementById('sBtnNone').textContent      = t.scalerNone;
+  document.getElementById('sBtnStd').textContent       = t.scalerStd;
+  document.getElementById('sBtnMinMax').textContent    = t.scalerMinMax;
+  document.getElementById('sBtnRobust').textContent    = t.scalerRobust;
+  document.getElementById('sampleStudentsTitle').textContent = t.sampleStudents;
+  document.getElementById('sdCalcTitle').textContent   = t.sdTitle;
+
+  const hasPeak = DISTS[state.distId].peakHandle;
+  if (state.scaler === 'none') {
+    document.getElementById('canvasCardTitle').textContent = t.canvasTitleNormal;
+    document.getElementById('dragHint').textContent = hasPeak ? t.dragHintFull : t.dragHintBasic;
+  } else {
+    const scalerTitles = { standard: t.scalerCardTitleStd, minmax: t.scalerCardTitleMinMax, robust: t.scalerCardTitleRobust };
+    const canvasTitles = { standard: t.canvasTitleStd, minmax: t.canvasTitleMinMax, robust: t.canvasTitleRobust };
+    document.getElementById('scalerCardTitle').textContent  = scalerTitles[state.scaler];
+    document.getElementById('canvasCardTitle').textContent  = canvasTitles[state.scaler];
+  }
+
+  updateTable();
+  updateDetail();
+  redraw();
+}
+
+function toggleLang() {
+  lang = lang === 'en' ? 'he' : 'en';
+  applyLang();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1526,9 +1702,7 @@ function setDist(id) {
 
 window.addEventListener('resize', () => redraw());
 generateBaseData();
-updateTable();
-updateDetail();
-redraw();
+applyLang();
 </script>
 </body>
 </html>
