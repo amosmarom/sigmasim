@@ -349,19 +349,19 @@ const DISTS = {
 // ══════════════════════════════════════════════════════
 
 const STUDENTS = [
-  { name: 'Maya',  z: -2.0, color: '#e53e3e' },
-  { name: 'Omer',  z: -1.2, color: '#dd6b20' },
-  { name: 'Noa',   z: -0.4, color: '#d69e2e' },
-  { name: 'Lior',  z: +0.3, color: '#38a169' },
-  { name: 'Tal',   z: +1.0, color: '#3182ce' },
-  { name: 'Yael',  z: +1.7, color: '#6b46c1' },
-  { name: 'Dana',  z: +2.5, color: '#b83280' },
+  { name: 'Maya',  grade: 48,  color: '#e53e3e' },
+  { name: 'Omer',  grade: 58,  color: '#dd6b20' },
+  { name: 'Noa',   grade: 67,  color: '#d69e2e' },
+  { name: 'Lior',  grade: 76,  color: '#38a169' },
+  { name: 'Tal',   grade: 84,  color: '#3182ce' },
+  { name: 'Yael',  grade: 92,  color: '#6b46c1' },
+  { name: 'Dana',  grade: 99,  color: '#b83280' },
 ];
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
-function studentGrade(student, mu, sigma) {
-  return clamp(mu + student.z * sigma, 0, 100);
+function studentGrade(student) {
+  return student.grade;
 }
 
 // ══════════════════════════════════════════════════════
@@ -679,7 +679,7 @@ function drawScaledMode(ctx, W) {
 
   // ── student dots at scaled positions ──
   STUDENTS.forEach((s, k) => {
-    const g  = studentGrade(s, state.mu, state.sigma);
+    const g  = studentGrade(s);
     const sv = applyScaler(g, params, state.scaler);
     const x  = toX(clamp(sv, lo, hi));
     const sel = state.selected === k;
@@ -697,7 +697,7 @@ function drawScaledMode(ctx, W) {
   // ── selected student annotation in scaled space ──
   if (state.selected !== null) {
     const s   = STUDENTS[state.selected];
-    const g   = studentGrade(s, state.mu, state.sigma);
+    const g   = studentGrade(s);
     const sv  = applyScaler(g, params, state.scaler);
     const svc = clamp(sv, lo, hi);
     const x   = toX(svc);
@@ -893,7 +893,7 @@ function drawDataPoints(ctx, sc) {
 function drawStudentDots(ctx, sc) {
   const { toX } = sc;
   STUDENTS.forEach((s, i) => {
-    const g = studentGrade(s, state.mu, state.sigma);
+    const g = studentGrade(s);
     const x = toX(g);
     const selected = state.selected === i;
     ctx.fillStyle = s.color;
@@ -914,7 +914,7 @@ function drawStudentAnnotation(ctx, sc, idx) {
   const { toX, toY } = sc;
   const s = STUDENTS[idx];
   const pdf = DISTS[state.distId].pdf;
-  const g = studentGrade(s, state.mu, state.sigma);
+  const g = studentGrade(s);
   const gx = toX(g), mx = toX(state.mu);
   const curveY = toY(pdf(g, state.mu, state.sigma));
 
@@ -929,7 +929,7 @@ function drawStudentAnnotation(ctx, sc, idx) {
     [mx, gx].forEach(bx => {
       ctx.beginPath(); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by + 6); ctx.stroke();
     });
-    const z = s.z;
+    const z = (g - state.mu) / state.sigma;
     const sign = z >= 0 ? '+' : '';
     ctx.fillStyle = s.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
     ctx.fillText(`${sign}${z.toFixed(2)}σ`, (mx + gx) / 2, by - 8);
@@ -1059,7 +1059,7 @@ function drawScalerCanvas() {
 
   // Student dots (on axis line)
   STUDENTS.forEach((s, k) => {
-    const g = studentGrade(s, state.mu, state.sigma);
+    const g = studentGrade(s);
     const sv = applyScaler(g, params, state.scaler);
     const x = toSX(Math.max(lo, Math.min(hi, sv)));
     const isSel = state.selected === k;
@@ -1290,7 +1290,7 @@ function getHandle(cx, cy, W) {
 function getStudentHit(cx, cy, W) {
   if (state.scaler !== 'none' && _scaledToX) {
     for (let i = 0; i < STUDENTS.length; i++) {
-      const g  = studentGrade(STUDENTS[i], state.mu, state.sigma);
+      const g  = studentGrade(STUDENTS[i]);
       const sv = applyScaler(g, _scaledParams, state.scaler);
       const x  = _scaledToX(clamp(sv, _scaledLo, _scaledHi));
       if (Math.hypot(cx - x, cy - AX_Y) < 11) return i;
@@ -1299,7 +1299,7 @@ function getStudentHit(cx, cy, W) {
   }
   const { toX } = makeScale(W);
   for (let i = 0; i < STUDENTS.length; i++) {
-    const g = studentGrade(STUDENTS[i], state.mu, state.sigma);
+    const g = studentGrade(STUDENTS[i]);
     if (Math.hypot(cx - toX(g), cy - AX_Y) < 11) return i;
   }
   return null;
@@ -1415,7 +1415,7 @@ function updateTable() {
 
   const tbody = document.getElementById('studentTableBody');
   tbody.innerHTML = STUDENTS.map((s, i) => {
-    const g    = studentGrade(s, state.mu, state.sigma);
+    const g    = studentGrade(s);
     const z    = (g - state.mu) / state.sigma;
     const ri   = regionInfo(Math.abs(z));
     const sel  = state.selected === i ? 'selected' : '';
@@ -1457,7 +1457,7 @@ function updateDetail() {
   }
 
   const s  = STUDENTS[state.selected];
-  const g  = studentGrade(s, state.mu, state.sigma);
+  const g  = studentGrade(s);
   const mu = state.mu, sigma = state.sigma;
   const diff = g - mu;
   const z    = diff / sigma;
