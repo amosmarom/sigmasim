@@ -38,6 +38,9 @@
     .scaler-btn:hover { border-color:#cbd5e0; color:var(--text); }
     .scaler-btn.active { background:#0d9488; border-color:#0d9488; color:#fff; }
     .sep { width:1px; height:24px; background:var(--border); flex-shrink:0; }
+    .pdf-preset-btn { padding:.35rem .7rem; border:2px solid #f97316; border-radius:16px; cursor:pointer; font-size:.78rem; font-weight:700; color:#f97316; background:#fff; transition:all .15s; }
+    .pdf-preset-btn:hover { background:#fff7ed; }
+    .pdf-preset-btn.active { background:#f97316; color:#fff; }
     .stat-pill { display:flex; align-items:center; gap:.4rem; font-size:.82rem; }
     .stat-pill label { color:var(--muted); font-weight:500; }
     .stat-pill .val { font-weight:800; color:var(--primary); min-width:2.8rem; }
@@ -120,13 +123,39 @@
            oninput="document.getElementById('nStudVal').textContent=this.value">
     <span id="nStudVal" style="font-weight:800;color:var(--primary);min-width:2rem;font-size:.82rem">50</span>
     <button class="toggle-btn" id="simBtn" onclick="toggleSim()">▶ Simulate</button>
-    <div class="sep"></div>
-    <span id="scalerLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
-    <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')"     id="sBtnNone">None</button>
-    <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')" id="sBtnStd">Standard</button>
-    <button class="scaler-btn"        data-scaler="minmax"   onclick="setScaler('minmax')"   id="sBtnMinMax">Min-Max</button>
-    <button class="scaler-btn"        data-scaler="robust"   onclick="setScaler('robust')"   id="sBtnRobust">Robust</button>
+    <span id="scalerGroup" style="display:contents">
+      <div class="sep"></div>
+      <span id="scalerLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">Scaler:</span>
+      <button class="scaler-btn active" data-scaler="none"     onclick="setScaler('none')"     id="sBtnNone">None</button>
+      <button class="scaler-btn"        data-scaler="standard" onclick="setScaler('standard')" id="sBtnStd">Standard</button>
+      <button class="scaler-btn"        data-scaler="minmax"   onclick="setScaler('minmax')"   id="sBtnMinMax">Min-Max</button>
+      <button class="scaler-btn"        data-scaler="robust"   onclick="setScaler('robust')"   id="sBtnRobust">Robust</button>
+    </span>
     <div class="hint" id="dragHint">◆ drag mean &nbsp;●  drag σ handle &nbsp;▲ drag peak height (Normal only)</div>
+  </div>
+
+  <!-- PDF mode controls bar (visible only when Show PDF is active) -->
+  <div id="pdfControlsBar" style="display:none;background:var(--card);border-radius:12px;padding:.7rem 1.2rem;box-shadow:0 1px 4px rgba(0,0,0,.08);align-items:center;gap:.75rem;flex-wrap:wrap">
+    <span style="font-size:.8rem;font-weight:700;color:#f97316;letter-spacing:.03em">PDF window</span>
+    <div class="sep"></div>
+    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">← left</span>
+    <input type="range" id="pdfLeftSlider" min="0.01" max="36" step="0.01" value="0.01"
+           style="width:140px;accent-color:#f97316"
+           oninput="pdfLeftW=+this.value;document.getElementById('pdfLeftVal').textContent=(+this.value).toFixed(2);redraw()">
+    <span id="pdfLeftVal" style="font-size:.85rem;font-weight:800;color:#f97316;min-width:2.8rem;font-family:'Courier New',monospace">0.01</span>
+    <div class="sep"></div>
+    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">right →</span>
+    <input type="range" id="pdfRightSlider" min="0.01" max="36" step="0.01" value="0.01"
+           style="width:140px;accent-color:#f97316"
+           oninput="pdfRightW=+this.value;document.getElementById('pdfRightVal').textContent=(+this.value).toFixed(2);redraw()">
+    <span id="pdfRightVal" style="font-size:.85rem;font-weight:800;color:#f97316;min-width:2.8rem;font-family:'Courier New',monospace">0.01</span>
+    <div class="sep"></div>
+    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">Snap:</span>
+    <button class="pdf-preset-btn" id="pPreset0"    onclick="setPDFPreset('zero')">≈ 0</button>
+    <button class="pdf-preset-btn" id="pPresetHalf" onclick="setPDFPreset('half')">½σ</button>
+    <button class="pdf-preset-btn" id="pPreset1"    onclick="setPDFPreset('1')">1σ</button>
+    <button class="pdf-preset-btn" id="pPreset2"    onclick="setPDFPreset('2')">2σ</button>
+    <button class="pdf-preset-btn" id="pPreset3"    onclick="setPDFPreset('3')">3σ</button>
   </div>
 
   <!-- Interactive canvas -->
@@ -136,9 +165,9 @@
   </div>
 
   <!-- Students + Detail -->
-  <div class="bottom-grid">
+  <div class="bottom-grid" id="bottomGrid">
 
-    <div class="table-card">
+    <div class="table-card" id="tableCard">
       <div class="card-title" id="sampleStudentsTitle">Sample Students</div>
       <table class="student-table">
         <thead>
@@ -472,6 +501,18 @@ function makeScale(W) {
 let _scaledToX = null, _scaledLo = 0, _scaledHi = 1, _scaledParams = null;
 
 function redraw() {
+  // Keep PDF width sliders max in sync with 3σ
+  if (state.showPDF) {
+    const maxW = +(state.sigma * 3).toFixed(2);
+    ['pdfLeftSlider','pdfRightSlider'].forEach((id, i) => {
+      const sl    = document.getElementById(id);
+      sl.max      = maxW;
+      const valId = i === 0 ? 'pdfLeftVal' : 'pdfRightVal';
+      if (i === 0 && pdfLeftW  > maxW) { pdfLeftW  = maxW; sl.value = maxW; document.getElementById(valId).textContent = maxW.toFixed(2); }
+      if (i === 1 && pdfRightW > maxW) { pdfRightW = maxW; sl.value = maxW; document.getElementById(valId).textContent = maxW.toFixed(2); }
+    });
+  }
+
   const canvas = document.getElementById('distCanvas');
   canvas.width  = canvas.offsetWidth || 900;
   const W = canvas.width;
@@ -1127,10 +1168,108 @@ function drawPDFAnnotations(ctx, W, toY, maxDens) {
   ctx.fillText('density f(x)', 0, 0);
   ctx.restore();
 
-  // Peak label on the curve
-  const peakY2 = toY(maxDens);
-  ctx.fillStyle = '#4361ee'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'left';
-  ctx.fillText(`f(peak) = ${maxDens.toFixed(4)}`, PAD_L + 8, Math.max(PLOT_TOP + 16, peakY2 - 5));
+  // In scaled mode, fall back to simple peak label
+  if (state.scaler !== 'none') {
+    const peakY2 = toY(maxDens);
+    ctx.fillStyle = '#4361ee'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(`f(peak) = ${maxDens.toFixed(4)}`, PAD_L + 8, Math.max(PLOT_TOP + 16, peakY2 - 5));
+    return;
+  }
+
+  // ── Hover strip + callout ─────────────────────────────────
+  const { toX } = makeScale(W);
+  const pdfFn   = DISTS[state.distId].pdf;
+  const isHover = hoverGrade !== null;
+  const gv      = isHover ? hoverGrade : state.mu;
+  const g0      = Math.max(0,   gv - pdfLeftW);
+  const g1      = Math.min(100, gv + pdfRightW);
+  const prob    = evalCDF(g1) - evalCDF(g0);
+  const dens    = pdfFn(gv, state.mu, state.sigma);
+
+  // Filled strip
+  const STEPS = 60;
+  ctx.beginPath();
+  ctx.moveTo(toX(g0), AX_Y);
+  for (let i = 0; i <= STEPS; i++) {
+    const x = g0 + (g1 - g0) * i / STEPS;
+    ctx.lineTo(toX(x), toY(pdfFn(x, state.mu, state.sigma)));
+  }
+  ctx.lineTo(toX(g1), AX_Y);
+  ctx.closePath();
+  ctx.fillStyle   = isHover ? 'rgba(249,115,22,0.50)' : 'rgba(67,97,238,0.60)';
+  ctx.fill();
+
+  // Strip outline
+  ctx.strokeStyle = isHover ? '#f97316' : '#4361ee';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(toX(g0), AX_Y);
+  for (let i = 0; i <= STEPS; i++) {
+    const x = g0 + (g1 - g0) * i / STEPS;
+    ctx.lineTo(toX(x), toY(pdfFn(x, state.mu, state.sigma)));
+  }
+  ctx.lineTo(toX(g1), AX_Y);
+  ctx.stroke();
+
+  // Callout box
+  const stripCx = toX(gv);
+  const curveY  = toY(dens);
+  const maxW    = Math.max(pdfLeftW, pdfRightW);
+  const dec     = maxW < 1 ? 2 : 0;
+  const line1   = `f(${gv.toFixed(1)}) = ${dens.toFixed(4)}`;
+  const line2   = `P(${g0.toFixed(dec)}–${g1.toFixed(dec)}) \u2248 ${(prob * 100).toFixed(2)}%`;
+
+  // Measure text to size box dynamically
+  ctx.font = '11px "Courier New", monospace';
+  const w1 = ctx.measureText(line1).width;
+  ctx.font = 'bold 20px system-ui';
+  const w2 = ctx.measureText(line2).width;
+  const PAD_BOX = 14;
+  const BOX_W = Math.max(w1, w2) + PAD_BOX * 2;
+  const BOX_H = 68, BOX_R = 9;
+  let bx = stripCx - BOX_W / 2;
+  let by = curveY - BOX_H - 22;
+  bx = Math.max(PAD_L + 4, Math.min(W - PAD_R - BOX_W - 4, bx));
+  by = Math.max(PLOT_TOP + 4, by);
+  if (by + BOX_H > AX_Y - 20) by = AX_Y - BOX_H - 20;
+
+  // Shadow
+  ctx.save();
+  ctx.shadowColor   = 'rgba(0,0,0,0.32)';
+  ctx.shadowBlur    = 12;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle     = '#1a202c';
+  rrect(ctx, bx, by, BOX_W, BOX_H, BOX_R);
+  ctx.fill();
+  ctx.restore();
+
+  // Accent top border (flat rect, rounded top corners only via clip would be complex — just fillRect)
+  ctx.fillStyle = isHover ? '#f97316' : '#4361ee';
+  ctx.fillRect(bx, by, BOX_W, 5);
+
+  // Line 1 — density (monospace, muted)
+  ctx.fillStyle  = '#a0aec0';
+  ctx.font       = '11px "Courier New", monospace';
+  ctx.textAlign  = 'left';
+  ctx.fillText(line1, bx + PAD_BOX, by + 26);
+
+  // Line 2 — probability (large, bright, bold)
+  ctx.fillStyle  = isHover ? '#fb923c' : '#93c5fd';
+  ctx.font       = 'bold 20px system-ui';
+  ctx.fillText(line2, bx + PAD_BOX, by + 56);
+
+  // Dashed stem from box to curve
+  const stemX   = clamp(stripCx, bx + 14, bx + BOX_W - 14);
+  const stemTop = by + BOX_H;
+  const stemBot = Math.max(curveY + 2, stemTop + 5);
+  ctx.strokeStyle = isHover ? 'rgba(249,115,22,0.55)' : 'rgba(99,179,237,0.55)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(stemX, stemTop);
+  ctx.lineTo(stripCx, stemBot);
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1310,6 +1449,9 @@ function getStudentHit(cx, cy, W) {
 // ══════════════════════════════════════════════════════
 
 let drag = null;
+let hoverGrade = null;
+let pdfLeftW  = 0.01;
+let pdfRightW = 0.01;
 
 function canvasCoords(e, canvas) {
   const r = canvas.getBoundingClientRect();
@@ -1374,6 +1516,12 @@ function onMove(e) {
   canvas.style.cursor = h === 'peak' ? 'ns-resize'
                       : h ? 'ew-resize'
                       : s !== null ? 'pointer' : 'default';
+
+  // PDF hover strip tracking
+  if (state.showPDF && state.scaler === 'none') {
+    hoverGrade = clamp(makeScale(canvas.width).toV(cx), 0, 100);
+    redraw();
+  }
 }
 
 function onUp() { drag = null; }
@@ -1382,7 +1530,7 @@ const canvas = document.getElementById('distCanvas');
 canvas.addEventListener('mousedown',  onDown);
 canvas.addEventListener('mousemove',  onMove);
 canvas.addEventListener('mouseup',    onUp);
-canvas.addEventListener('mouseleave', onUp);
+canvas.addEventListener('mouseleave', () => { drag = null; if (hoverGrade !== null) { hoverGrade = null; redraw(); } });
 canvas.addEventListener('touchstart', onDown, { passive: false });
 canvas.addEventListener('touchmove',  onMove, { passive: false });
 canvas.addEventListener('touchend',   onUp);
@@ -1615,7 +1763,28 @@ function setScaler(type) {
 
 function toggleShowPDF() {
   state.showPDF = !state.showPDF;
+  if (!state.showPDF) { hoverGrade = null; }
   document.getElementById('showPDFBtn').classList.toggle('active', state.showPDF);
+  document.getElementById('pdfControlsBar').style.display = state.showPDF ? 'flex' : 'none';
+  document.getElementById('scalerGroup').style.display    = state.showPDF ? 'none' : 'contents';
+  document.getElementById('tableCard').style.display      = state.showPDF ? 'none' : '';
+  document.getElementById('bottomGrid').style.gridTemplateColumns = state.showPDF ? '1fr' : '';
+  if (state.showPDF && state.scaler !== 'none') setScaler('none');
+  redraw();
+}
+
+function setPDFPreset(key) {
+  const maxW = state.sigma * 3;
+  const vals = { zero: 0.01, half: state.sigma / 2, '1': state.sigma, '2': state.sigma * 2, '3': maxW };
+  const v = Math.min(vals[key], maxW);
+  pdfLeftW  = v;
+  pdfRightW = v;
+  document.getElementById('pdfLeftSlider').value  = v;
+  document.getElementById('pdfRightSlider').value = v;
+  document.getElementById('pdfLeftVal').textContent  = v.toFixed(2);
+  document.getElementById('pdfRightVal').textContent = v.toFixed(2);
+  document.querySelectorAll('.pdf-preset-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pPreset'  + { zero:'0', half:'Half', '1':'1', '2':'2', '3':'3' }[key]).classList.add('active');
   redraw();
 }
 
