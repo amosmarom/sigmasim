@@ -114,8 +114,8 @@
     <div class="stat-pill"><label>σ (std dev)</label><span class="val" id="sigVal">12.0</span></div>
     <div class="sep"></div>
     <button class="toggle-btn" id="showDotsBtn" onclick="toggleShowDots()">Show All Points</button>
-    <button class="toggle-btn" id="showPDFBtn"  onclick="toggleShowPDF()">Show PDF</button>
-    <button class="toggle-btn" id="showCDFBtn"  onclick="toggleShowCDF()">Show CDF</button>
+    <button class="toggle-btn" id="showPDFBtn"  onclick="toggleShowPDF()">PDF</button>
+    <button class="toggle-btn" id="showCDFBtn"  onclick="toggleShowCDF()">CDF</button>
     <div class="sep"></div>
     <span id="nStudLabel" style="font-size:.8rem;font-weight:600;color:var(--muted)">N students:</span>
     <input type="range" id="nStudSlider" min="10" max="200" value="50" step="5"
@@ -134,28 +134,21 @@
     <div class="hint" id="dragHint">◆ drag mean &nbsp;●  drag σ handle &nbsp;▲ drag peak height (Normal only)</div>
   </div>
 
-  <!-- PDF mode controls bar (visible only when Show PDF is active) -->
+  <!-- PDF / CDF mode controls bar -->
   <div id="pdfControlsBar" style="display:none;background:var(--card);border-radius:12px;padding:.7rem 1.2rem;box-shadow:0 1px 4px rgba(0,0,0,.08);align-items:center;gap:.75rem;flex-wrap:wrap">
-    <span style="font-size:.8rem;font-weight:700;color:#f97316;letter-spacing:.03em">PDF window</span>
-    <div class="sep"></div>
-    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">← left</span>
-    <input type="range" id="pdfLeftSlider" min="0.01" max="36" step="0.01" value="0.01"
-           style="width:140px;accent-color:#f97316"
-           oninput="pdfLeftW=+this.value;document.getElementById('pdfLeftVal').textContent=(+this.value).toFixed(2);redraw()">
-    <span id="pdfLeftVal" style="font-size:.85rem;font-weight:800;color:#f97316;min-width:2.8rem;font-family:'Courier New',monospace">0.01</span>
-    <div class="sep"></div>
-    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">right →</span>
-    <input type="range" id="pdfRightSlider" min="0.01" max="36" step="0.01" value="0.01"
-           style="width:140px;accent-color:#f97316"
-           oninput="pdfRightW=+this.value;document.getElementById('pdfRightVal').textContent=(+this.value).toFixed(2);redraw()">
-    <span id="pdfRightVal" style="font-size:.85rem;font-weight:800;color:#f97316;min-width:2.8rem;font-family:'Courier New',monospace">0.01</span>
-    <div class="sep"></div>
-    <span style="font-size:.78rem;font-weight:600;color:var(--muted)">Snap:</span>
-    <button class="pdf-preset-btn" id="pPreset0"    onclick="setPDFPreset('zero')">≈ 0</button>
-    <button class="pdf-preset-btn" id="pPresetHalf" onclick="setPDFPreset('half')">½σ</button>
-    <button class="pdf-preset-btn" id="pPreset1"    onclick="setPDFPreset('1')">1σ</button>
-    <button class="pdf-preset-btn" id="pPreset2"    onclick="setPDFPreset('2')">2σ</button>
-    <button class="pdf-preset-btn" id="pPreset3"    onclick="setPDFPreset('3')">3σ</button>
+    <span id="pdfBarTitle" style="font-size:.8rem;font-weight:700;color:#f97316;letter-spacing:.03em">PDF window</span>
+    <span id="cdfSliderGroup" style="display:none">
+      <div class="sep"></div>
+      <input type="range" id="cdfWSlider" min="1" max="50" step="1" value="12"
+             style="width:140px;accent-color:#f97316"
+             oninput="cdfW=+this.value;state.cdfA=clamp(Math.round(state.mu-cdfW),0,100);state.cdfB=clamp(Math.round(state.mu+cdfW),0,100);document.getElementById('cdfWVal').textContent=this.value;document.querySelectorAll('.cdf-preset-btn').forEach(b=>b.classList.remove('active'));redraw()">
+      <span id="cdfWVal" style="font-size:.85rem;font-weight:800;color:#f97316;min-width:2rem;font-family:'Courier New',monospace">12</span>
+      <div class="sep"></div>
+      <button class="pdf-preset-btn cdf-preset-btn" onclick="setCDFPreset(0.5)">½σ</button>
+      <button class="pdf-preset-btn cdf-preset-btn" onclick="setCDFPreset(1)">1σ</button>
+      <button class="pdf-preset-btn cdf-preset-btn" onclick="setCDFPreset(2)">2σ</button>
+      <button class="pdf-preset-btn cdf-preset-btn" onclick="setCDFPreset(3)">3σ</button>
+    </span>
   </div>
 
   <!-- Interactive canvas -->
@@ -213,7 +206,7 @@ const T = {
     distNormal:          'Normal',       distRskew:  'Right-Skewed',
     distLskew:           'Left-Skewed',  distUniform:'Uniform',  distBimodal:'Bimodal',
     showDots:            'Show All Points',
-    showPDF:             'Show PDF',     showCDF:    'Show CDF',
+    showPDF:             'PDF',          showCDF:    'CDF',
     nStudents:           'N students:',
     simulate:            '▶ Simulate',   simStop:    '■ Stop',
     scalerLabel:         'Scaler:',
@@ -268,7 +261,7 @@ const T = {
     distNormal:          'נורמלי',     distRskew:  'מוטה ימינה',
     distLskew:           'מוטה שמאלה', distUniform:'אחיד',  distBimodal:'דו-שיאי',
     showDots:            'הצג את כל הנקודות',
-    showPDF:             'הצג PDF',    showCDF:    'הצג CDF',
+    showPDF:             'PDF',         showCDF:    'CDF',
     nStudents:           ':N תלמידים',
     simulate:            '▶ סימולציה', simStop:    '■ עצור',
     scalerLabel:         ':סקיילר',
@@ -502,17 +495,6 @@ let _scaledToX = null, _scaledLo = 0, _scaledHi = 1, _scaledParams = null;
 
 function redraw() {
   // Keep PDF width sliders max in sync with 3σ
-  if (state.showPDF) {
-    const maxW = +(state.sigma * 3).toFixed(2);
-    ['pdfLeftSlider','pdfRightSlider'].forEach((id, i) => {
-      const sl    = document.getElementById(id);
-      sl.max      = maxW;
-      const valId = i === 0 ? 'pdfLeftVal' : 'pdfRightVal';
-      if (i === 0 && pdfLeftW  > maxW) { pdfLeftW  = maxW; sl.value = maxW; document.getElementById(valId).textContent = maxW.toFixed(2); }
-      if (i === 1 && pdfRightW > maxW) { pdfRightW = maxW; sl.value = maxW; document.getElementById(valId).textContent = maxW.toFixed(2); }
-    });
-  }
-
   const canvas = document.getElementById('distCanvas');
   canvas.width  = canvas.offsetWidth || 900;
   const W = canvas.width;
@@ -1181,8 +1163,8 @@ function drawPDFAnnotations(ctx, W, toY, maxDens) {
   const pdfFn   = DISTS[state.distId].pdf;
   const isHover = hoverGrade !== null;
   const gv      = isHover ? hoverGrade : state.mu;
-  const g0      = Math.max(0,   gv - pdfLeftW);
-  const g1      = Math.min(100, gv + pdfRightW);
+  const g0      = Math.max(0,   gv - pdfW);
+  const g1      = Math.min(100, gv + pdfW);
   const prob    = evalCDF(g1) - evalCDF(g0);
   const dens    = pdfFn(gv, state.mu, state.sigma);
 
@@ -1214,7 +1196,7 @@ function drawPDFAnnotations(ctx, W, toY, maxDens) {
   // Callout box
   const stripCx = toX(gv);
   const curveY  = toY(dens);
-  const maxW    = Math.max(pdfLeftW, pdfRightW);
+  const maxW    = pdfW;
   const dec     = maxW < 1 ? 2 : 0;
   const line1   = `f(${gv.toFixed(1)}) = ${dens.toFixed(4)}`;
   const line2   = `P(${g0.toFixed(dec)}–${g1.toFixed(dec)}) \u2248 ${(prob * 100).toFixed(2)}%`;
@@ -1330,13 +1312,18 @@ function drawCDFOverlay(ctx, W, sc) {
   const toCY = v => AX_Y - v * (AX_Y - PLOT_TOP);
 
   // ── Shade area under PDF between a and b ──
+  const isDragging = drag && drag.handle === 'cdfRange';
   ctx.beginPath(); ctx.moveTo(toX(a), AX_Y);
   for (let i = 0; i <= 200; i++) {
     const x = a + (b - a) * i / 200;
     ctx.lineTo(toX(x), toY(pdf(x, mu, sigma)));
   }
   ctx.lineTo(toX(b), AX_Y); ctx.closePath();
-  ctx.fillStyle = 'rgba(249,115,22,0.22)'; ctx.fill();
+  ctx.fillStyle = isDragging ? 'rgba(56,161,105,0.55)' : 'rgba(249,115,22,0.48)';
+  ctx.fill();
+  ctx.strokeStyle = isDragging ? '#38a169' : '#f97316';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 
   // ── CDF S-curve ──
   ctx.beginPath();
@@ -1422,6 +1409,8 @@ function getHandle(cx, cy, W) {
     const hY = AX_Y + 30;
     if (Math.hypot(cx - toX(state.cdfA), cy - (hY - 3)) < 16) return 'cdfA';
     if (Math.hypot(cx - toX(state.cdfB), cy - (hY - 3)) < 16) return 'cdfB';
+    const a = Math.min(state.cdfA, state.cdfB), b = Math.max(state.cdfA, state.cdfB);
+    if (cx >= toX(a) && cx <= toX(b) && cy >= PLOT_TOP && cy <= AX_Y) return 'cdfRange';
   }
   return null;
 }
@@ -1450,8 +1439,8 @@ function getStudentHit(cx, cy, W) {
 
 let drag = null;
 let hoverGrade = null;
-let pdfLeftW  = 0.01;
-let pdfRightW = 0.01;
+let pdfW = 0.01;
+let cdfW = 12;
 
 function canvasCoords(e, canvas) {
   const r = canvas.getBoundingClientRect();
@@ -1467,7 +1456,7 @@ function onDown(e) {
   if (state.scaler === 'none') {
     const handle = getHandle(cx, cy, canvas.width);
     if (handle) {
-      drag = { handle, startX: cx, startY: cy, startMu: state.mu, startSigma: state.sigma };
+      drag = { handle, startX: cx, startY: cy, startMu: state.mu, startSigma: state.sigma, startCdfA: state.cdfA, startCdfB: state.cdfB };
       e.preventDefault();
       return;
     }
@@ -1498,6 +1487,12 @@ function onMove(e) {
       state.cdfA = clamp(sc.toV(cx), 0, 100);
     } else if (drag.handle === 'cdfB') {
       state.cdfB = clamp(sc.toV(cx), 0, 100);
+    } else if (drag.handle === 'cdfRange') {
+      const dv = sc.toV(cx) - sc.toV(drag.startX);
+      const width = drag.startCdfB - drag.startCdfA;
+      const newA = clamp(drag.startCdfA + dv, 0, 100 - width);
+      state.cdfA = newA;
+      state.cdfB = newA + width;
     }
 
     document.getElementById('muVal').textContent  = state.mu.toFixed(1);
@@ -1514,6 +1509,7 @@ function onMove(e) {
   const h = getHandle(cx, cy, canvas.width);
   const s = !h ? getStudentHit(cx, cy, canvas.width) : null;
   canvas.style.cursor = h === 'peak' ? 'ns-resize'
+                      : h === 'cdfRange' ? 'grab'
                       : h ? 'ew-resize'
                       : s !== null ? 'pointer' : 'default';
 
@@ -1765,7 +1761,9 @@ function toggleShowPDF() {
   state.showPDF = !state.showPDF;
   if (!state.showPDF) { hoverGrade = null; }
   document.getElementById('showPDFBtn').classList.toggle('active', state.showPDF);
-  document.getElementById('pdfControlsBar').style.display = state.showPDF ? 'flex' : 'none';
+  const barVisible = state.showPDF || state.showCDF;
+  document.getElementById('pdfControlsBar').style.display = barVisible ? 'flex' : 'none';
+  document.getElementById('pdfBarTitle').textContent = state.showPDF ? 'PDF window' : 'CDF window';
   document.getElementById('scalerGroup').style.display    = state.showPDF ? 'none' : 'contents';
   document.getElementById('tableCard').style.display      = state.showPDF ? 'none' : '';
   document.getElementById('bottomGrid').style.gridTemplateColumns = state.showPDF ? '1fr' : '';
@@ -1773,18 +1771,14 @@ function toggleShowPDF() {
   redraw();
 }
 
-function setPDFPreset(key) {
-  const maxW = state.sigma * 3;
-  const vals = { zero: 0.01, half: state.sigma / 2, '1': state.sigma, '2': state.sigma * 2, '3': maxW };
-  const v = Math.min(vals[key], maxW);
-  pdfLeftW  = v;
-  pdfRightW = v;
-  document.getElementById('pdfLeftSlider').value  = v;
-  document.getElementById('pdfRightSlider').value = v;
-  document.getElementById('pdfLeftVal').textContent  = v.toFixed(2);
-  document.getElementById('pdfRightVal').textContent = v.toFixed(2);
-  document.querySelectorAll('.pdf-preset-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('pPreset'  + { zero:'0', half:'Half', '1':'1', '2':'2', '3':'3' }[key]).classList.add('active');
+function setCDFPreset(n) {
+  cdfW = clamp(Math.round(n * state.sigma), 1, 50);
+  state.cdfA = clamp(Math.round(state.mu - cdfW), 0, 100);
+  state.cdfB = clamp(Math.round(state.mu + cdfW), 0, 100);
+  document.getElementById('cdfWSlider').value = cdfW;
+  document.getElementById('cdfWVal').textContent = cdfW;
+  document.querySelectorAll('.cdf-preset-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
   redraw();
 }
 
@@ -1792,10 +1786,17 @@ function toggleShowCDF() {
   if (state.scaler !== 'none') return;  // CDF only in grade-space mode
   state.showCDF = !state.showCDF;
   if (state.showCDF) {
-    state.cdfA = Math.max(0,   Math.round(state.mu - state.sigma));
-    state.cdfB = Math.min(100, Math.round(state.mu + state.sigma));
+    cdfW = Math.round(state.sigma);
+    state.cdfA = clamp(Math.round(state.mu - cdfW), 0, 100);
+    state.cdfB = clamp(Math.round(state.mu + cdfW), 0, 100);
+    document.getElementById('cdfWSlider').value = cdfW;
+    document.getElementById('cdfWVal').textContent = cdfW;
   }
   document.getElementById('showCDFBtn').classList.toggle('active', state.showCDF);
+  const barVisible = state.showPDF || state.showCDF;
+  document.getElementById('pdfControlsBar').style.display = barVisible ? 'flex' : 'none';
+  document.getElementById('pdfBarTitle').textContent = state.showPDF ? 'PDF window' : 'CDF window';
+  document.getElementById('cdfSliderGroup').style.display = state.showCDF ? 'contents' : 'none';
   redraw();
 }
 
